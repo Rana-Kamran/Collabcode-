@@ -43,7 +43,8 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
   useEffect(() => {
     if (!roomId) return;
 
-    const newSocket = io('https://collabcode-s40g.onrender.com', {
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://collabcode-s40g.onrender.com';
+    const newSocket = io(BACKEND_URL, {
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: 5
