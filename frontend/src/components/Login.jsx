@@ -7,7 +7,8 @@ const Login = ({ onLogin, onSignup, showToast }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    password: ''
+    password: '',
+    role: 'Student'
   });
   const [errors, setErrors] = useState({});
 
@@ -59,9 +60,7 @@ const Login = ({ onLogin, onSignup, showToast }) => {
     }
 
     if (isSignUp) {
-      // For signup, we'll default to student or let the user choose role in next screen
-      // Actually, since App handles missing role, we can pass null or student
-      onSignup(formData.name, formData.email, formData.password, 'Student');
+      onSignup(formData.name, formData.email, formData.password, formData.role);
     } else {
       onLogin(formData.email, formData.password);
     }
@@ -77,20 +76,44 @@ const Login = ({ onLogin, onSignup, showToast }) => {
             <h1>{isSignUp ? 'Create Account' : 'Sign In'}</h1>
             
             {isSignUp && (
-              <div className="form-group">
-                <div className="input-icon">
-                  <FaUser />
-                  <input
-                    type="text"
-                    name="name"
-                    placeholder="Name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    className={errors.name ? 'error' : ''}
-                  />
+              <>
+                <div className="form-group">
+                  <div className="input-icon">
+                    <FaUser />
+                    <input
+                      type="text"
+                      name="name"
+                      placeholder="Name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      className={errors.name ? 'error' : ''}
+                    />
+                  </div>
+                  {errors.name && <span className="error-message">{errors.name}</span>}
                 </div>
-                {errors.name && <span className="error-message">{errors.name}</span>}
-              </div>
+
+                <div className="form-group">
+                  <select 
+                    name="role" 
+                    value={formData.role} 
+                    onChange={handleChange}
+                    className="role-select"
+                    style={{
+                      width: '100%',
+                      padding: '12px 15px',
+                      backgroundColor: '#eee',
+                      border: 'none',
+                      borderRadius: '4px',
+                      marginBottom: '8px',
+                      fontSize: '14px',
+                      color: '#333'
+                    }}
+                  >
+                    <option value="Student">I am a Student</option>
+                    <option value="Teacher">I am a Teacher</option>
+                  </select>
+                </div>
+              </>
             )}
 
             <div className="form-group">
