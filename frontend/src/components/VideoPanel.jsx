@@ -16,6 +16,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
   const [remoteStreams, setRemoteStreams] = useState({});
   
   const peerConnections = useRef({});
+  const currentConstraints = useRef({ video: null, audio: null });
   
   // Use a reliable unique ID
   const userId = currentUser?.id || currentUser?._id;
@@ -26,16 +27,24 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
 
   // ========== INITIALIZE LOCAL MEDIA ==========
   const initMedia = async () => {
-    // Release existing tracks before requesting new ones
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
+    // Only proceed if constraints have actually changed to prevent blinking
+    if (currentConstraints.current.video === canUseCamera && 
+        currentConstraints.current.audio === canUseMic && 
+        localStream) {
+      return;
     }
+
+    console.log('Initializing Media with constraints:', { video: canUseCamera, audio: canUseMic });
+    currentConstraints.current = { video: canUseCamera, audio: canUseMic };
 
     setMediaError(null);
     
-    // If permissions are both false for student, don't even try to get media
+    // If permissions are both false for student, stop and clear stream
     if (!canUseCamera && !canUseMic) {
-      setLocalStream(null);
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        setLocalStream(null);
+      }
       return;
     }
 
@@ -47,7 +56,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
       
       setLocalStream(stream);
       
-      // Update existing peer connections with new tracks
+      // Update existing peer connections with new tracks without dropping connection
       Object.values(peerConnections.current).forEach(pc => {
         const senders = pc.getSenders();
         stream.getTracks().forEach(track => {
@@ -63,12 +72,13 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     } catch (err) {
       console.error('Media Access Error:', err);
       setMediaError(err.name === 'NotAllowedError' ? 'Permission Denied' : 'Camera error');
+      currentConstraints.current = { video: null, audio: null };
     }
   };
 
   useEffect(() => {
     initMedia();
-  }, [canUseMic, canUseCamera]); // Trigger re-init when permissions change
+  }, [canUseMic, canUseCamera]); // Trigger re-init only when permissions change
 
   useEffect(() => {
     return () => {
@@ -230,7 +240,11 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
                   autoPlay 
                   playsInline 
                   muted={feed.isLocal}
-                  ref={el => { if (el && feed.stream) el.srcObject = feed.stream; }}
+                  ref={el => { 
+                    if (el && feed.stream && el.srcObject !== feed.stream) {
+                      el.srcObject = feed.stream; 
+                    }
+                  }}
                   className={feed.isOff ? 'hidden' : ''}
                 />
                 {feed.isOff && (
