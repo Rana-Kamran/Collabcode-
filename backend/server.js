@@ -26,6 +26,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'x-auth-token']
 }));
 
+// Root Route
+app.get('/', (req, res) => {
+  res.send('CollabCode API is running...');
+});
+
 // Define Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/rooms', require('./routes/roomRoutes'));
