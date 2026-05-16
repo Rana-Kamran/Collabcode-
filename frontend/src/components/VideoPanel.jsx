@@ -19,49 +19,58 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
   
   // Use a reliable unique ID
   const userId = currentUser?.id || currentUser?._id;
-  const isHost = isTeacher || role === 'Teacher' || role === 'teacher';
+  const isHost = isTeacher || role?.toLowerCase() === 'teacher' || role?.toLowerCase() === 'host';
 
   const canUseMic = isHost || roomPermissions?.useMicrophone !== false;
   const canUseCamera = isHost || roomPermissions?.useCamera !== false;
 
   // ========== INITIALIZE LOCAL MEDIA ==========
   const initMedia = async () => {
-    // 1. Explicitly stop any existing streams to release the hardware lock
+    // Release existing tracks before requesting new ones
     if (localStream) {
-      console.log('Stopping existing stream tracks to release device...');
       localStream.getTracks().forEach(track => track.stop());
-      setLocalStream(null);
     }
 
     setMediaError(null);
     
+    // If permissions are both false for student, don't even try to get media
+    if (!canUseCamera && !canUseMic) {
+      setLocalStream(null);
+      return;
+    }
+
     try {
-      console.log('Requesting Media. Camera:', canUseCamera, 'Mic:', canUseMic);
-      
       const stream = await navigator.mediaDevices.getUserMedia({
         video: canUseCamera ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
         audio: canUseMic
       });
       
       setLocalStream(stream);
-      showToast('Media devices activated');
+      
+      // Update existing peer connections with new tracks
+      Object.values(peerConnections.current).forEach(pc => {
+        const senders = pc.getSenders();
+        stream.getTracks().forEach(track => {
+          const sender = senders.find(s => s.track?.kind === track.kind);
+          if (sender) {
+            sender.replaceTrack(track);
+          } else {
+            pc.addTrack(track, stream);
+          }
+        });
+      });
+
     } catch (err) {
       console.error('Media Access Error:', err);
-      
-      let friendlyError = 'Camera access failed';
-      if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        friendlyError = 'Camera is already in use by another app (Zoom, Skype, or another tab). Please close them and click Retry.';
-      } else if (err.name === 'NotAllowedError') {
-        friendlyError = 'Permission Denied. Please allow camera access in your browser settings.';
-      }
-
-      setMediaError(friendlyError);
-      showToast(friendlyError, 'error');
+      setMediaError(err.name === 'NotAllowedError' ? 'Permission Denied' : 'Camera error');
     }
   };
 
   useEffect(() => {
     initMedia();
+  }, [canUseMic, canUseCamera]); // Trigger re-init when permissions change
+
+  useEffect(() => {
     return () => {
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
@@ -141,8 +150,10 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
-        { urls: 'stun:global.stun.twilio.com:3478' }
-      ]
+        { urls: 'stun:global.stun.twilio.com:3478' },
+        { urls: 'stun:relay.metered.ca:80' }
+      ],
+      iceCandidatePoolSize: 10,
     });
 
     peerConnections.current[targetId] = pc;

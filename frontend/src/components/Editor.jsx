@@ -536,7 +536,7 @@ for(let i = 1; i <= 5; i++) {
             formatOnPaste: true,
             formatOnType: true,
             suggestOnTriggerCharacters: true,
-            readOnly: role === 'student' && !roomPermissions?.editCode,
+            readOnly: role?.toLowerCase() === 'student' && !roomPermissions?.editCode,
             renderWhitespace: 'selection',
             smoothScrolling: true,
             cursorBlinking: 'smooth',
