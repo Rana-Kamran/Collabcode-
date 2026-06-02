@@ -143,10 +143,31 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
       }
     });
 
+    socket.on('participants-update', ({ participants: newParticipants }) => {
+      // Cleanup feeds for users who are no longer in the room
+      const activeIds = newParticipants.map(p => String(p.id || p._id || p.socketId));
+      setRemoteStreams(prev => {
+        const updated = { ...prev };
+        let changed = false;
+        Object.keys(updated).forEach(id => {
+          if (!activeIds.includes(String(id))) {
+            delete updated[id];
+            if (peerConnections.current[id]) {
+              peerConnections.current[id].close();
+              delete peerConnections.current[id];
+            }
+            changed = true;
+          }
+        });
+        return changed ? updated : prev;
+      });
+    });
+
     return () => {
       socket.off('video-offer');
       socket.off('video-answer');
       socket.off('video-ice-candidate');
+      socket.off('participants-update');
     };
   }, [socket, roomId, userId, localStream]);
 
@@ -154,7 +175,10 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     if (peerConnections.current[targetId]) return peerConnections.current[targetId];
 
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
     });
 
     peerConnections.current[targetId] = pc;
@@ -174,6 +198,19 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
       setRemoteStreams(prev => ({ ...prev, [targetId]: e.streams[0] }));
     };
 
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        setRemoteStreams(prev => {
+          if (prev[targetId]) {
+            const next = { ...prev };
+            delete next[targetId];
+            return next;
+          }
+          return prev;
+        });
+      }
+    };
+
     return pc;
   };
 
@@ -183,16 +220,15 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     participants.forEach(p => {
       const pId = String(p.id || p._id || p.socketId);
       if (pId && pId !== String(userId) && !peerConnections.current[pId]) {
-        // Teacher always initiates or use string comparison to avoid glare
-        const shouldInitiate = isHost || String(userId) > String(pId);
-        if (shouldInitiate) {
-          console.log('WebRTC: Connecting to', pId);
-          const pc = getOrCreatePeerConnection(pId);
-          pc.createOffer().then(offer => {
-            pc.setLocalDescription(offer);
-            socket.emit('video-offer', { roomId, offer, targetId: pId });
-          });
-        }
+        // Reduced delay by initiating immediately when a new participant is detected
+        console.log('WebRTC: Connecting to', pId);
+        const pc = getOrCreatePeerConnection(pId);
+        pc.createOffer()
+          .then(offer => pc.setLocalDescription(offer))
+          .then(() => {
+            socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId: pId });
+          })
+          .catch(e => console.error('Offer creation error:', e));
       }
     });
   }, [participants, localStream, userId]);
@@ -213,19 +249,21 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
         String(p.socketId) === String(id)
       );
 
-      // Force UI to show "Camera Off" if teacher revoked their permission
+      // If participant is gone, we shouldn't even show this feed, but as a safety:
+      if (!participant) return null;
+
       const remoteCameraOff = participant?.permissions?.useCamera === false;
       const remoteMicOff = participant?.permissions?.useMicrophone === false;
 
       return {
         id,
-        name: participant?.name || participant?.username || 'User ' + id.slice(-4),
+        name: participant?.name || participant?.username || 'User',
         stream,
         isLocal: false,
         isOff: remoteCameraOff,
         isMuted: remoteMicOff
       };
-    })
+    }).filter(Boolean)
   ];
 
   return (
