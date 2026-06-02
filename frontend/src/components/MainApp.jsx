@@ -9,7 +9,7 @@ import Chatbot from './Chatbot';
 import InviteModal from './InviteModal';
 import './MainApp.css';
 
-const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
+const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) => {
   const roomId = currentRoom?.roomId || currentRoom?.id;
   
   // Define helper variables at the top to avoid ReferenceErrors
@@ -77,7 +77,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
 
     newSocket.on('kicked', () => {
       showToast('You have been removed from the room', 'error');
-      setTimeout(() => onLogout(), 2000);
+      setTimeout(() => onExitRoom(), 2000);
     });
 
     newSocket.on('disconnect', () => {
@@ -124,7 +124,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
 
     newSocket.on('room-ended', () => {
       showToast('Room has been ended by the host', 'warning');
-      setTimeout(() => onLogout(), 2000);
+      setTimeout(() => onExitRoom(), 2000);
     });
 
     setSocket(newSocket);
@@ -147,7 +147,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
       if (socket && isConnected) {
         socket.emit('end-room', { roomId: roomId });
       }
-      onLogout();
+      onExitRoom();
     }
   };
 
@@ -189,7 +189,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
 
   const handleLeaveRoom = () => {
     if (window.confirm('Are you sure you want to leave?')) {
-      onLogout();
+      onExitRoom();
     }
   };
 

@@ -106,6 +106,12 @@ function App() {
     setCurrentScreen('role');
   };
 
+  const handleExitRoom = () => {
+    setCurrentRoom(null);
+    localStorage.removeItem('collabcode-current-room');
+    setCurrentScreen(role === 'teacher' ? 'teacher-dashboard' : 'student-dashboard');
+  };
+
   const handleLogout = () => {
     setUser(null);
     setRole(null);
@@ -163,6 +169,7 @@ function App() {
             role={role}
             currentRoom={currentRoom}
             onLogout={handleLogout}
+            onExitRoom={handleExitRoom}
             showToast={showToast}
           />
         )}
