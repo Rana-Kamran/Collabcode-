@@ -27,20 +27,24 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
 
   // ========== INITIALIZE LOCAL MEDIA ==========
   const initMedia = async () => {
-    // Only proceed if constraints have actually changed to prevent blinking
-    if (currentConstraints.current.video === canUseCamera && 
-        currentConstraints.current.audio === canUseMic && 
-        localStream) {
+    // Check if we already have the correct tracks
+    const currentVideoTrack = localStream?.getVideoTracks()[0];
+    const currentAudioTrack = localStream?.getAudioTracks()[0];
+    
+    const needsVideo = canUseCamera;
+    const needsAudio = canUseMic;
+    
+    const hasCorrectVideo = (!!currentVideoTrack && currentVideoTrack.enabled) === needsVideo;
+    const hasCorrectAudio = (!!currentAudioTrack && currentAudioTrack.enabled) === needsAudio;
+
+    if (localStream && hasCorrectVideo && hasCorrectAudio) {
       return;
     }
 
-    console.log('Initializing Media with constraints:', { video: canUseCamera, audio: canUseMic });
-    currentConstraints.current = { video: canUseCamera, audio: canUseMic };
-
-    setMediaError(null);
+    console.log('Updating Media:', { video: needsVideo, audio: needsAudio });
     
-    // If permissions are both false for student, stop and clear stream
-    if (!canUseCamera && !canUseMic) {
+    // If permissions are both false for student, stop everything
+    if (!needsVideo && !needsAudio) {
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         setLocalStream(null);
@@ -49,14 +53,26 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     }
 
     try {
+      // If we already have a stream but need to add/remove a track
+      if (localStream) {
+        if (!needsVideo && currentVideoTrack) {
+          currentVideoTrack.stop();
+          localStream.removeTrack(currentVideoTrack);
+        }
+        if (!needsAudio && currentAudioTrack) {
+          currentAudioTrack.stop();
+          localStream.removeTrack(currentAudioTrack);
+        }
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: canUseCamera ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
-        audio: canUseMic
+        video: needsVideo ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
+        audio: needsAudio
       });
       
       setLocalStream(stream);
       
-      // Update existing peer connections with new tracks without dropping connection
+      // Update existing peer connections with new tracks
       Object.values(peerConnections.current).forEach(pc => {
         const senders = pc.getSenders();
         stream.getTracks().forEach(track => {
@@ -72,13 +88,12 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     } catch (err) {
       console.error('Media Access Error:', err);
       setMediaError(err.name === 'NotAllowedError' ? 'Permission Denied' : 'Camera error');
-      currentConstraints.current = { video: null, audio: null };
     }
   };
 
   useEffect(() => {
     initMedia();
-  }, [canUseMic, canUseCamera]); // Trigger re-init only when permissions change
+  }, [canUseMic, canUseCamera, roomId]); // roomId ensures reset on room change
 
   useEffect(() => {
     return () => {
@@ -212,13 +227,16 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
 
   const allVideoFeeds = [
     { id: userId, name: 'You (Local)', stream: localStream, isLocal: true, isOff: isVideoOff || !!mediaError },
-    ...Object.entries(remoteStreams).map(([id, stream]) => ({
-      id,
-      name: participants.find(p => (p.id || p._id) === id)?.username || 'Remote User',
-      stream,
-      isLocal: false,
-      isOff: false
-    }))
+    ...Object.entries(remoteStreams).map(([id, stream]) => {
+      const participant = participants.find(p => String(p.id || p._id) === String(id));
+      return {
+        id,
+        name: participant?.name || participant?.username || 'Remote User',
+        stream,
+        isLocal: false,
+        isOff: false
+      };
+    })
   ];
 
   return (
