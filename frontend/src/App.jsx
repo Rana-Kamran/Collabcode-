@@ -110,9 +110,9 @@ function App() {
     setCurrentRoom(null);
     localStorage.removeItem('collabcode-current-room');
     
-    // Use user.role from the state which is more reliable
-    const userRole = (user?.role || role || '').toLowerCase();
-    if (userRole === 'teacher') {
+    // Defensive role check: Default to student-dashboard unless clearly a teacher
+    const userRole = String(user?.role || role || '').toLowerCase();
+    if (userRole === 'teacher' || userRole === 'host') {
       setCurrentScreen('teacher-dashboard');
     } else {
       setCurrentScreen('student-dashboard');
