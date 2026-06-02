@@ -26,19 +26,10 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     const needsVideo = canUseCamera;
     const needsAudio = canUseMic;
 
-    console.log('Syncing media. Needs:', { needsVideo, needsAudio });
-
-    // If both off, stop local tracks
     if (!needsVideo && !needsAudio) {
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
         setLocalStream(null);
-        // Clear tracks from all peer connections
-        Object.values(peerConnections.current).forEach(pc => {
-          pc.getSenders().forEach(sender => {
-            try { pc.removeTrack(sender); } catch (e) {}
-          });
-        });
       }
       return;
     }
@@ -53,21 +44,17 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
         });
         setLocalStream(stream);
       } else {
-        const hasVideo = stream.getVideoTracks().some(t => t.readyState === 'live');
-        const hasAudio = stream.getAudioTracks().some(t => t.readyState === 'live');
+        const videoTrack = stream.getVideoTracks()[0];
+        const audioTrack = stream.getAudioTracks()[0];
 
-        if (needsVideo && !hasVideo) {
+        if (needsVideo && (!videoTrack || videoTrack.readyState === 'ended')) {
           const vStream = await navigator.mediaDevices.getUserMedia({ video: true });
-          const vTrack = vStream.getVideoTracks()[0];
-          stream.addTrack(vTrack);
-          addTrackToAllPeers(vTrack, stream);
+          stream.addTrack(vStream.getVideoTracks()[0]);
         }
 
-        if (needsAudio && !hasAudio) {
+        if (needsAudio && (!audioTrack || audioTrack.readyState === 'ended')) {
           const aStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const aTrack = aStream.getAudioTracks()[0];
-          stream.addTrack(aTrack);
-          addTrackToAllPeers(aTrack, stream);
+          stream.addTrack(aStream.getAudioTracks()[0]);
         }
 
         stream.getVideoTracks().forEach(t => t.enabled = needsVideo && !isVideoOff);
@@ -79,31 +66,32 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     }
   };
 
-  const addTrackToAllPeers = (track, stream) => {
-    Object.entries(peerConnections.current).forEach(([targetId, pc]) => {
-      const senders = pc.getSenders();
-      const existingSender = senders.find(s => s.track?.kind === track.kind);
-      
-      if (existingSender) {
-        existingSender.replaceTrack(track);
-      } else {
-        pc.addTrack(track, stream);
-        pc.createOffer().then(offer => pc.setLocalDescription(offer))
-          .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId }));
-      }
-    });
-  };
-
   useEffect(() => {
     initMedia();
   }, [canUseMic, canUseCamera]); 
 
+  // Aggressive track injection (Fixes teacher refresh/delay)
   useEffect(() => {
-    if (localStream) {
-      localStream.getVideoTracks().forEach(t => t.enabled = canUseCamera && !isVideoOff);
-      localStream.getAudioTracks().forEach(t => t.enabled = canUseMic && !isAudioMuted);
-    }
-  }, [isVideoOff, isAudioMuted, canUseMic, canUseCamera, localStream]);
+    if (!localStream) return;
+    
+    localStream.getVideoTracks().forEach(t => t.enabled = canUseCamera && !isVideoOff);
+    localStream.getAudioTracks().forEach(t => t.enabled = canUseMic && !isAudioMuted);
+
+    Object.entries(peerConnections.current).forEach(([targetId, pc]) => {
+      const senders = pc.getSenders();
+      localStream.getTracks().forEach(track => {
+        const sender = senders.find(s => s.track?.kind === track.kind);
+        if (sender) {
+          if (sender.track !== track) sender.replaceTrack(track);
+        } else {
+          pc.addTrack(track, localStream);
+          // Trigger renegotiation
+          pc.createOffer().then(offer => pc.setLocalDescription(offer))
+            .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId }));
+        }
+      });
+    });
+  }, [localStream, isVideoOff, isAudioMuted, canUseMic, canUseCamera]);
 
   useEffect(() => {
     return () => {
@@ -117,29 +105,26 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     if (!socket || !roomId || !userId) return;
 
     socket.on('video-offer', async ({ offer, fromId }) => {
-      console.log('WebRTC: Offer received from', fromId);
       try {
         const pc = getOrCreatePeerConnection(fromId);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        
         if (pc.signalingState === 'have-remote-offer') {
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           socket.emit('video-answer', { roomId, answer, targetId: fromId });
         }
       } catch (e) {
-        console.error('WebRTC: Offer handle error', e);
+        console.error('WebRTC offer error', e);
       }
     });
 
     socket.on('video-answer', async ({ answer, fromId }) => {
-      console.log('WebRTC: Answer received from', fromId);
       const pc = peerConnections.current[fromId];
       if (pc && pc.signalingState === 'have-local-offer') {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
         } catch (e) {
-          console.error('WebRTC: Answer handle error', e);
+          console.error('WebRTC answer error', e);
         }
       }
     });
@@ -150,7 +135,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (e) {
-          console.error('WebRTC: ICE error', e);
+          console.error('ICE error', e);
         }
       }
     });
@@ -177,7 +162,6 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     socket.on('user-joined', ({ user: newUser }) => {
       const pId = String(newUser.id);
       if (pId !== String(userId)) {
-        console.log('WebRTC: User re-joined, resetting connection:', pId);
         if (peerConnections.current[pId]) {
           peerConnections.current[pId].close();
           delete peerConnections.current[pId];
@@ -200,7 +184,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
       socket.off('participants-update');
       socket.off('user-joined');
     };
-  }, [socket, roomId, userId, localStream]);
+  }, [socket, roomId, userId]);
 
   const getOrCreatePeerConnection = (targetId) => {
     if (peerConnections.current[targetId]) return peerConnections.current[targetId];
@@ -222,7 +206,6 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     };
 
     pc.ontrack = (e) => {
-      console.log('WebRTC: Remote track received from', targetId);
       setRemoteStreams(prev => ({ ...prev, [targetId]: e.streams[0] }));
     };
 
@@ -248,19 +231,17 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     participants.forEach(p => {
       const pId = String(p.id);
       if (pId && pId !== String(userId) && !peerConnections.current[pId]) {
-        // Teacher always initiates or stable tie-breaker
         const shouldInitiate = isHost || String(userId) > String(pId);
         if (shouldInitiate) {
-          console.log('WebRTC: Initiating to', pId);
           const pc = getOrCreatePeerConnection(pId);
           pc.createOffer()
             .then(offer => pc.setLocalDescription(offer))
             .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId: pId }))
-            .catch(e => console.error('Initial offer error:', e));
+            .catch(e => console.error('Signaling error', e));
         }
       }
     });
-  }, [participants, userId, socket, localStream]);
+  }, [participants, userId, socket]);
 
   const allVideoFeeds = [
     { 
