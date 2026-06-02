@@ -83,6 +83,13 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
 
     newSocket.on('room-data', (data) => {
       setParticipants(data.participants || []);
+      
+      // Sync local permissions with data from server
+      const localUser = data.participants?.find(p => String(p.id) === String(user?.id || user?._id));
+      if (localUser && localUser.permissions) {
+        setCurrentPermissions(localUser.permissions);
+      }
+
       if (editorRef.current && data.code) {
         editorRef.current.setValue(data.code);
       }
@@ -90,6 +97,12 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
 
     newSocket.on('participants-update', (data) => {
       setParticipants(data.participants);
+      
+      // Also sync local permissions from the list
+      const localUser = data.participants?.find(p => String(p.id) === String(user?.id || user?._id));
+      if (localUser && localUser.permissions) {
+        setCurrentPermissions(localUser.permissions);
+      }
     });
 
     newSocket.on('user-joined', (data) => {

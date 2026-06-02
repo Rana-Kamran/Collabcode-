@@ -89,15 +89,9 @@ const SidebarPanel = ({
       }
     });
 
-    socket.on('participants-update', (data) => {
-      // This is crucial for updating the permissions UI for the teacher
-      console.log('Sidebar: Participants updated', data.participants);
-    });
-
     return () => {
       socket.off('new-message');
       socket.off('user-typing');
-      socket.off('participants-update');
     };
   }, [socket]);
 

@@ -30,77 +30,82 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     const needsVideo = canUseCamera;
     const needsAudio = canUseMic;
 
-    // If both off, we can stop the tracks to save power/privacy
+    console.log('Syncing media. Needs:', { needsVideo, needsAudio });
+
+    // If both off, stop everything
     if (!needsVideo && !needsAudio) {
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
         setLocalStream(null);
+        // Clear senders in all PCs
+        Object.values(peerConnections.current).forEach(pc => {
+          pc.getSenders().forEach(sender => {
+            try { pc.removeTrack(sender); } catch (e) {}
+          });
+        });
       }
       return;
     }
 
     try {
-      // If we don't have a stream yet, get one
-      if (!localStream) {
-        const stream = await navigator.mediaDevices.getUserMedia({
+      let stream = localStream;
+      
+      // If we don't have a stream, get one with what we need
+      if (!stream) {
+        stream = await navigator.mediaDevices.getUserMedia({
           video: needsVideo ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
           audio: needsAudio
         });
         setLocalStream(stream);
-        
-        // Add tracks to any existing peer connections
-        Object.values(peerConnections.current).forEach(pc => {
-          stream.getTracks().forEach(track => pc.addTrack(track, stream));
-        });
+        // Initial connections will be handled by the participants-watch useEffect
       } else {
         // We have a stream, check if we need to add missing tracks
-        const videoTrack = localStream.getVideoTracks()[0];
-        const audioTrack = localStream.getAudioTracks()[0];
+        const hasVideo = stream.getVideoTracks().some(t => t.readyState === 'live');
+        const hasAudio = stream.getAudioTracks().some(t => t.readyState === 'live');
 
-        // If we need video but don't have it, get it
-        if (needsVideo && (!videoTrack || videoTrack.readyState === 'ended')) {
+        if (needsVideo && !hasVideo) {
+          console.log('Adding video track...');
           const vStream = await navigator.mediaDevices.getUserMedia({ video: true });
           const vTrack = vStream.getVideoTracks()[0];
-          localStream.addTrack(vTrack);
-          
-          // Update all peer connections
-          Object.values(peerConnections.current).forEach(pc => {
-            const senders = pc.getSenders();
-            const sender = senders.find(s => s.track?.kind === 'video');
-            if (sender) {
-              sender.replaceTrack(vTrack);
-            } else {
-              pc.addTrack(vTrack, localStream);
-            }
-          });
+          stream.addTrack(vTrack);
+          addTrackToAllPeers(vTrack, stream);
         }
 
-        // If we need audio but don't have it, get it
-        if (needsAudio && (!audioTrack || audioTrack.readyState === 'ended')) {
+        if (needsAudio && !hasAudio) {
+          console.log('Adding audio track...');
           const aStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           const aTrack = aStream.getAudioTracks()[0];
-          localStream.addTrack(aTrack);
-          
-          // Update all peer connections
-          Object.values(peerConnections.current).forEach(pc => {
-            const senders = pc.getSenders();
-            const sender = senders.find(s => s.track?.kind === 'audio');
-            if (sender) {
-              sender.replaceTrack(aTrack);
-            } else {
-              pc.addTrack(aTrack, localStream);
-            }
-          });
+          stream.addTrack(aTrack);
+          addTrackToAllPeers(aTrack, stream);
         }
 
-        // Sync enabled states
-        if (localStream.getVideoTracks()[0]) localStream.getVideoTracks()[0].enabled = needsVideo && !isVideoOff;
-        if (localStream.getAudioTracks()[0]) localStream.getAudioTracks()[0].enabled = needsAudio && !isAudioMuted;
+        // Sync enabled states for local stream
+        stream.getVideoTracks().forEach(t => t.enabled = needsVideo && !isVideoOff);
+        stream.getAudioTracks().forEach(t => t.enabled = needsAudio && !isAudioMuted);
       }
     } catch (err) {
       console.error('Media Access Error:', err);
-      setMediaError(err.name === 'NotAllowedError' ? 'Permission Denied' : 'Camera error');
+      setMediaError(err.name === 'NotAllowedError' ? 'Permission Denied' : 'Media error');
     }
+  };
+
+  const addTrackToAllPeers = (track, stream) => {
+    Object.entries(peerConnections.current).forEach(([targetId, pc]) => {
+      const senders = pc.getSenders();
+      const existingSender = senders.find(s => s.track?.kind === track.kind);
+      
+      if (existingSender) {
+        existingSender.replaceTrack(track);
+      } else {
+        pc.addTrack(track, stream);
+        // Force re-negotiation
+        pc.createOffer().then(offer => {
+          return pc.setLocalDescription(offer);
+        }).then(() => {
+          socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId });
+        }).catch(e => console.error('Renegotiation error:', e));
+      }
+    });
   };
 
   useEffect(() => {
@@ -137,9 +142,12 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
       try {
         const pc = getOrCreatePeerConnection(fromId);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit('video-answer', { roomId, answer, targetId: fromId });
+        
+        if (pc.signalingState === 'have-remote-offer') {
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socket.emit('video-answer', { roomId, answer, targetId: fromId });
+        }
       } catch (e) {
         console.error('WebRTC: Error handling offer:', e);
       }
@@ -150,7 +158,9 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
       const pc = peerConnections.current[fromId];
       if (pc) {
         try {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          if (pc.signalingState === 'have-local-offer') {
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          }
         } catch (e) {
           console.error('WebRTC: Error handling answer:', e);
         }
@@ -222,9 +232,12 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         setRemoteStreams(prev => {
-          const next = { ...prev };
-          delete next[targetId];
-          return next;
+          if (prev[targetId]) {
+            const next = { ...prev };
+            delete next[targetId];
+            return next;
+          }
+          return prev;
         });
       }
     };
