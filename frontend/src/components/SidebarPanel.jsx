@@ -89,9 +89,15 @@ const SidebarPanel = ({
       }
     });
 
+    socket.on('participants-update', (data) => {
+      // This is crucial for updating the permissions UI for the teacher
+      console.log('Sidebar: Participants updated', data.participants);
+    });
+
     return () => {
       socket.off('new-message');
       socket.off('user-typing');
+      socket.off('participants-update');
     };
   }, [socket]);
 
@@ -223,14 +229,22 @@ const SidebarPanel = ({
   const togglePermission = (participantId, permissionType) => {
     if (!isHost) return;
     
+    const participant = participants.find(p => p.id === participantId);
+    if (!participant) return;
+
+    const currentValue = participant.permissions?.[permissionType];
+    const newValue = !currentValue;
+
     if (socket && roomId) {
-      const currentValue = participants.find(p => p.id === participantId)?.permissions?.[permissionType];
       socket.emit('update-permission', {
         roomId: roomId,
         targetUserId: participantId,
         permission: permissionType,
-        value: !currentValue
+        value: newValue
       });
+      
+      // The visual update will happen when 'participants-update' is received from the server
+      // and the 'participants' prop is updated in the parent component.
     }
   };
 
