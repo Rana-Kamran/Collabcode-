@@ -68,29 +68,13 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     initMedia();
   }, [canUseMic, canUseCamera]); 
 
-  // Aggressive track injection & sync
+  // Sync track enabled states locally
   useEffect(() => {
-    if (!localStream) return;
-    
-    localStream.getVideoTracks().forEach(t => t.enabled = canUseCamera && !isVideoOff);
-    localStream.getAudioTracks().forEach(t => t.enabled = canUseMic && !isAudioMuted);
-
-    Object.entries(peerConnections.current).forEach(([targetId, pc]) => {
-      const senders = pc.getSenders();
-      localStream.getTracks().forEach(track => {
-        const sender = senders.find(s => s.track?.kind === track.kind);
-        if (sender) {
-          if (sender.track !== track) sender.replaceTrack(track);
-        } else {
-          pc.addTrack(track, localStream);
-          if (pc.signalingState === 'stable') {
-            pc.createOffer().then(offer => pc.setLocalDescription(offer))
-              .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId }));
-          }
-        }
-      });
-    });
-  }, [localStream, isVideoOff, isAudioMuted, canUseMic, canUseCamera]);
+    if (localStream) {
+      localStream.getVideoTracks().forEach(t => t.enabled = canUseCamera && !isVideoOff);
+      localStream.getAudioTracks().forEach(t => t.enabled = canUseMic && !isAudioMuted);
+    }
+  }, [isVideoOff, isAudioMuted, canUseMic, canUseCamera, localStream]);
 
   useEffect(() => {
     return () => {
@@ -104,8 +88,19 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     if (!socket || !roomId || !userId) return;
 
     socket.on('video-offer', async ({ offer, fromId }) => {
+      console.log('WebRTC: Receiving offer from', fromId);
       try {
         const pc = getOrCreatePeerConnection(fromId);
+        
+        // Handle Glare: If we are also waiting for an answer, only one should proceed
+        if (offer.type === 'offer' && pc.signalingState !== 'stable') {
+           // Basic tie-breaker: higher ID wins
+           if (String(userId) < String(fromId)) {
+             console.log('WebRTC: Offer collision, yielding to', fromId);
+             return; 
+           }
+        }
+
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         if (pc.signalingState === 'have-remote-offer') {
           const answer = await pc.createAnswer();
@@ -113,17 +108,18 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
           socket.emit('video-answer', { roomId, answer, targetId: fromId });
         }
       } catch (e) {
-        console.error('WebRTC offer error', e);
+        console.error('WebRTC: Offer handle error', e);
       }
     });
 
     socket.on('video-answer', async ({ answer, fromId }) => {
+      console.log('WebRTC: Receiving answer from', fromId);
       const pc = peerConnections.current[fromId];
       if (pc && pc.signalingState === 'have-local-offer') {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
         } catch (e) {
-          console.error('WebRTC answer error', e);
+          console.error('WebRTC: Answer handle error', e);
         }
       }
     });
@@ -134,7 +130,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (e) {
-          console.error('ICE error', e);
+          console.error('WebRTC: ICE error', e);
         }
       }
     });
@@ -146,6 +142,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
         let changed = false;
         Object.keys(updated).forEach(id => {
           if (!activeIds.includes(String(id))) {
+            console.log('WebRTC: Cleaning up left user', id);
             delete updated[id];
             if (peerConnections.current[id]) {
               peerConnections.current[id].close();
@@ -161,7 +158,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     socket.on('user-joined', ({ user: newUser }) => {
       const pId = String(newUser.id);
       if (pId !== String(userId)) {
-        console.log('WebRTC: Resetting connection for re-joined user:', pId);
+        console.log('WebRTC: User re-joined, resetting connection:', pId);
         if (peerConnections.current[pId]) {
           peerConnections.current[pId].close();
           delete peerConnections.current[pId];
@@ -174,16 +171,6 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
           }
           return prev;
         });
-        
-        // INSTANT RE-INITIATION
-        if (newUser.role?.toLowerCase() === 'teacher' || newUser.role?.toLowerCase() === 'host') {
-           setTimeout(() => {
-             const pc = getOrCreatePeerConnection(pId);
-             pc.createOffer()
-              .then(offer => pc.setLocalDescription(offer))
-              .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId: pId }));
-           }, 500); // Tiny delay to allow teacher to setup socket
-        }
       }
     });
 
@@ -194,7 +181,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
       socket.off('participants-update');
       socket.off('user-joined');
     };
-  }, [socket, roomId, userId]);
+  }, [socket, roomId, userId, localStream]);
 
   const getOrCreatePeerConnection = (targetId) => {
     if (peerConnections.current[targetId]) return peerConnections.current[targetId];
@@ -203,9 +190,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' }
+        { urls: 'stun:stun2.l.google.com:19302' }
       ]
     });
 
@@ -222,11 +207,24 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     };
 
     pc.ontrack = (e) => {
-      console.log('WebRTC: Remote track received from', targetId);
-      setRemoteStreams(prev => ({ ...prev, [targetId]: e.streams[0] }));
+      console.log('WebRTC: Remote track from', targetId);
+      if (e.streams && e.streams[0]) {
+        setRemoteStreams(prev => ({ ...prev, [targetId]: e.streams[0] }));
+      }
+    };
+
+    pc.onnegotiationneeded = () => {
+      if (pc.signalingState === 'stable') {
+        console.log('WebRTC: Negotiation needed for', targetId);
+        pc.createOffer()
+          .then(offer => pc.setLocalDescription(offer))
+          .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId }))
+          .catch(e => console.error('Negotiation error', e));
+      }
     };
 
     pc.onconnectionstatechange = () => {
+      console.log(`WebRTC: Connection with ${targetId} is ${pc.connectionState}`);
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         setRemoteStreams(prev => {
           if (prev[targetId]) {
@@ -242,29 +240,28 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     return pc;
   };
 
-  // Connection Watcher
+  // Connection Watcher (Only initiates once localStream is ready to share)
   useEffect(() => {
-    if (!socket || !participants || !userId) return;
+    if (!socket || !participants || !userId || !localStream) return;
 
-    participants.forEach(p => {
-      const pId = String(p.id);
-      if (pId && pId !== String(userId) && !peerConnections.current[pId]) {
-        const isTargetTeacher = p.role?.toLowerCase() === 'teacher' || p.role?.toLowerCase() === 'host';
-        const shouldInitiate = isHost || isTargetTeacher || String(userId) > String(pId);
-        
-        if (shouldInitiate) {
-          console.log('WebRTC: Proactive initiation to', pId);
-          const pc = getOrCreatePeerConnection(pId);
-          if (pc.signalingState === 'stable') {
-            pc.createOffer()
-              .then(offer => pc.setLocalDescription(offer))
-              .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId: pId }))
-              .catch(e => console.error('Proactive signaling error', e));
+    // Small delay to ensure sockets are ready on both sides
+    const timer = setTimeout(() => {
+      participants.forEach(p => {
+        const pId = String(p.id);
+        if (pId && pId !== String(userId) && !peerConnections.current[pId]) {
+          const isTargetTeacher = p.role?.toLowerCase() === 'teacher' || p.role?.toLowerCase() === 'host';
+          const shouldInitiate = isHost || isTargetTeacher || String(userId) > String(pId);
+          
+          if (shouldInitiate) {
+            console.log('WebRTC: Initiating to', pId);
+            getOrCreatePeerConnection(pId); // onnegotiationneeded will trigger offer
           }
         }
-      }
-    });
-  }, [participants, userId, socket]);
+      });
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [participants, userId, socket, localStream]);
 
   const allVideoFeeds = [
     { 
