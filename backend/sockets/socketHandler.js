@@ -81,6 +81,14 @@ module.exports = (io) => {
         }
       });
 
+      socket.on('end-room', ({ roomId }) => {
+        console.log(`Room ${roomId} ended by host`);
+        io.to(roomId).emit('room-ended');
+        if (roomsData[roomId]) {
+          delete roomsData[roomId];
+        }
+      });
+
       // ==================== OTHER EVENTS ====================
 
       socket.on('code-change', (data) => {
