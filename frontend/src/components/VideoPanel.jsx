@@ -27,64 +27,78 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
 
   // ========== INITIALIZE LOCAL MEDIA ==========
   const initMedia = async () => {
-    // Check if we already have the correct tracks
-    const currentVideoTrack = localStream?.getVideoTracks()[0];
-    const currentAudioTrack = localStream?.getAudioTracks()[0];
-    
     const needsVideo = canUseCamera;
     const needsAudio = canUseMic;
     
-    const hasCorrectVideo = (!!currentVideoTrack && currentVideoTrack.enabled) === needsVideo;
-    const hasCorrectAudio = (!!currentAudioTrack && currentAudioTrack.enabled) === needsAudio;
-
-    if (localStream && hasCorrectVideo && hasCorrectAudio) {
-      return;
-    }
-
-    console.log('Updating Media:', { video: needsVideo, audio: needsAudio });
+    console.log('Syncing Media Permissions:', { needsVideo, needsAudio });
     
-    // If permissions are both false for student, stop everything
+    // 1. Handle Permission Revocation (Stop tracks immediately)
+    if (localStream) {
+      localStream.getTracks().forEach(track => {
+        if ((track.kind === 'video' && !needsVideo) || (track.kind === 'audio' && !needsAudio)) {
+          console.log(`Stopping ${track.kind} track due to permission revocation`);
+          track.stop();
+          localStream.removeTrack(track);
+          
+          // Also remove from all active peer connections to stop sending to others
+          Object.values(peerConnections.current).forEach(pc => {
+            const senders = pc.getSenders();
+            const sender = senders.find(s => s.track?.kind === track.kind);
+            if (sender) {
+              try {
+                pc.removeTrack(sender);
+              } catch (e) {
+                console.error('Error removing track from PC:', e);
+              }
+            }
+          });
+        }
+      });
+    }
+
+    // 2. If both disabled, clear local stream state
     if (!needsVideo && !needsAudio) {
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        setLocalStream(null);
-      }
+      if (localStream) setLocalStream(null);
       return;
     }
 
+    // 3. Request new tracks if they are needed but missing
     try {
-      // If we already have a stream but need to add/remove a track
-      if (localStream) {
-        if (!needsVideo && currentVideoTrack) {
-          currentVideoTrack.stop();
-          localStream.removeTrack(currentVideoTrack);
-        }
-        if (!needsAudio && currentAudioTrack) {
-          currentAudioTrack.stop();
-          localStream.removeTrack(currentAudioTrack);
-        }
-      }
+      const hasVideo = localStream?.getVideoTracks().some(t => t.readyState === 'live');
+      const hasAudio = localStream?.getAudioTracks().some(t => t.readyState === 'live');
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: needsVideo ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
-        audio: needsAudio
-      });
-      
-      setLocalStream(stream);
-      
-      // Update existing peer connections with new tracks
-      Object.values(peerConnections.current).forEach(pc => {
-        const senders = pc.getSenders();
-        stream.getTracks().forEach(track => {
-          const sender = senders.find(s => s.track?.kind === track.kind);
-          if (sender) {
-            sender.replaceTrack(track);
-          } else {
-            pc.addTrack(track, stream);
-          }
+      if ((needsVideo && !hasVideo) || (needsAudio && !hasAudio)) {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          video: needsVideo ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
+          audio: needsAudio
         });
-      });
 
+        let updatedStream = localStream || new MediaStream();
+        
+        newStream.getTracks().forEach(track => {
+          // If we already have a track of this kind, remove it first
+          const oldTrack = updatedStream.getTracks().find(t => t.kind === track.kind);
+          if (oldTrack) {
+            oldTrack.stop();
+            updatedStream.removeTrack(oldTrack);
+          }
+          
+          updatedStream.addTrack(track);
+          
+          // Update all peer connections
+          Object.values(peerConnections.current).forEach(pc => {
+            const senders = pc.getSenders();
+            const sender = senders.find(s => s.track?.kind === track.kind);
+            if (sender) {
+              sender.replaceTrack(track);
+            } else {
+              pc.addTrack(track, updatedStream);
+            }
+          });
+        });
+
+        setLocalStream(updatedStream);
+      }
     } catch (err) {
       console.error('Media Access Error:', err);
       setMediaError(err.name === 'NotAllowedError' ? 'Permission Denied' : 'Camera error');
@@ -93,7 +107,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
 
   useEffect(() => {
     initMedia();
-  }, [canUseMic, canUseCamera, roomId]); // roomId ensures reset on room change
+  }, [canUseMic, canUseCamera, roomId]);
 
   useEffect(() => {
     return () => {
@@ -228,10 +242,16 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
   const allVideoFeeds = [
     { id: userId, name: 'You (Local)', stream: localStream, isLocal: true, isOff: isVideoOff || !!mediaError },
     ...Object.entries(remoteStreams).map(([id, stream]) => {
-      const participant = participants.find(p => String(p.id || p._id) === String(id));
+      // Robust lookup: check id, _id, and socketId against the remote stream id
+      const participant = participants?.find(p => 
+        String(p.id) === String(id) || 
+        String(p._id) === String(id) || 
+        String(p.socketId) === String(id)
+      );
+
       return {
         id,
-        name: participant?.name || participant?.username || 'Remote User',
+        name: participant?.name || participant?.username || participant?.user?.name || 'Remote User',
         stream,
         isLocal: false,
         isOff: false
