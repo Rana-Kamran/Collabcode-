@@ -70,7 +70,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     initMedia();
   }, [canUseMic, canUseCamera]); 
 
-  // Aggressive track injection (Fixes teacher refresh/delay)
+  // Aggressive track injection & sync
   useEffect(() => {
     if (!localStream) return;
     
@@ -85,9 +85,10 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
           if (sender.track !== track) sender.replaceTrack(track);
         } else {
           pc.addTrack(track, localStream);
-          // Trigger renegotiation
-          pc.createOffer().then(offer => pc.setLocalDescription(offer))
-            .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId }));
+          if (pc.signalingState === 'stable') {
+            pc.createOffer().then(offer => pc.setLocalDescription(offer))
+              .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId }));
+          }
         }
       });
     });
@@ -162,6 +163,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     socket.on('user-joined', ({ user: newUser }) => {
       const pId = String(newUser.id);
       if (pId !== String(userId)) {
+        console.log('WebRTC: Resetting connection for re-joined user:', pId);
         if (peerConnections.current[pId]) {
           peerConnections.current[pId].close();
           delete peerConnections.current[pId];
@@ -174,6 +176,15 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
           }
           return prev;
         });
+        
+        // INSTANT RE-INITIATION
+        // If the teacher re-joined, students should initiate immediately to reduce delay
+        if (newUser.role?.toLowerCase() === 'teacher' || newUser.role?.toLowerCase() === 'host') {
+           const pc = getOrCreatePeerConnection(pId);
+           pc.createOffer()
+            .then(offer => pc.setLocalDescription(offer))
+            .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId: pId }));
+        }
       }
     });
 
@@ -184,7 +195,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
       socket.off('participants-update');
       socket.off('user-joined');
     };
-  }, [socket, roomId, userId]);
+  }, [socket, roomId, userId, localStream]); // localStream added to dep list for reactive cleanup
 
   const getOrCreatePeerConnection = (targetId) => {
     if (peerConnections.current[targetId]) return peerConnections.current[targetId];
@@ -206,6 +217,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     };
 
     pc.ontrack = (e) => {
+      console.log('WebRTC: Remote track received from', targetId);
       setRemoteStreams(prev => ({ ...prev, [targetId]: e.streams[0] }));
     };
 
@@ -225,19 +237,26 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     return pc;
   };
 
+  // Connection Watcher
   useEffect(() => {
     if (!socket || !participants || !userId) return;
 
     participants.forEach(p => {
       const pId = String(p.id);
       if (pId && pId !== String(userId) && !peerConnections.current[pId]) {
-        const shouldInitiate = isHost || String(userId) > String(pId);
+        // Teacher always initiates OR students initiate to teacher
+        const isTargetTeacher = p.role?.toLowerCase() === 'teacher' || p.role?.toLowerCase() === 'host';
+        const shouldInitiate = isHost || isTargetTeacher || String(userId) > String(pId);
+        
         if (shouldInitiate) {
+          console.log('WebRTC: Proactive initiation to', pId);
           const pc = getOrCreatePeerConnection(pId);
-          pc.createOffer()
-            .then(offer => pc.setLocalDescription(offer))
-            .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId: pId }))
-            .catch(e => console.error('Signaling error', e));
+          if (pc.signalingState === 'stable') {
+            pc.createOffer()
+              .then(offer => pc.setLocalDescription(offer))
+              .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId: pId }))
+              .catch(e => console.error('Proactive signaling error', e));
+          }
         }
       }
     });
