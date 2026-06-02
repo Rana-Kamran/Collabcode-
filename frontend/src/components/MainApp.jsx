@@ -16,6 +16,10 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
   const isTeacher = role?.toLowerCase() === 'teacher' || role?.toLowerCase() === 'host';
   const isStudent = role?.toLowerCase() === 'student';
 
+  // STABLE USER ID (Crucial for sync)
+  const stableUserId = useRef(user?.id || user?._id || `temp-${Math.random().toString(36).substr(2, 9)}`);
+  const userId = stableUserId.current;
+
   const [panels, setPanels] = useState({
     sidebar: true,
     output: true,
@@ -57,7 +61,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
       newSocket.emit('join-room', {
         roomId: roomId,
         user: {
-          id: user?.id || user?._id || Date.now().toString(),
+          id: userId,
           name: user?.name || user?.username || 'User',
           role: role,
           avatar: (user?.name || user?.username || 'U').charAt(0).toUpperCase()
@@ -85,7 +89,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
       setParticipants(data.participants || []);
       
       // Sync local permissions with data from server
-      const localUser = data.participants?.find(p => String(p.id) === String(user?.id || user?._id));
+      const localUser = data.participants?.find(p => String(p.id) === String(userId));
       if (localUser && localUser.permissions) {
         setCurrentPermissions(localUser.permissions);
       }
@@ -99,7 +103,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
       setParticipants(data.participants);
       
       // Also sync local permissions from the list
-      const localUser = data.participants?.find(p => String(p.id) === String(user?.id || user?._id));
+      const localUser = data.participants?.find(p => String(p.id) === String(userId));
       if (localUser && localUser.permissions) {
         setCurrentPermissions(localUser.permissions);
       }
@@ -107,7 +111,6 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
 
     newSocket.on('user-joined', (data) => {
       setParticipants(prev => {
-        // Remove existing entry for the same user ID to prevent duplicates
         const filtered = prev.filter(p => String(p.id) !== String(data.user.id));
         return [...filtered, data.user];
       });
@@ -128,7 +131,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
 
     return () => {
       if (newSocket) {
-        newSocket.emit('leave-room', { roomId: roomId, userId: user?.id });
+        newSocket.emit('leave-room', { roomId: roomId, userId: userId });
         newSocket.close();
       }
     };
@@ -177,7 +180,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
         socket.emit('code-change', {
           roomId: roomId,
           code: uploadedCode,
-          userId: user?.id
+          userId: userId
         });
       }
     };
@@ -251,7 +254,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
             showToast={showToast}
             socket={socket}
             roomId={roomId}
-            user={user}
+            user={{ ...user, id: userId }}
             isTeacher={isTeacher}
             roomPermissions={currentPermissions}
           />
@@ -259,7 +262,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
 
         <Editor 
           ref={editorRef}
-          user={user}
+          user={{ ...user, id: userId }}
           role={role}
           showToast={showToast}
           socket={socket}
@@ -277,7 +280,8 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
             showToast={showToast}
             socket={socket}
             roomId={roomId}
-            currentUser={user}
+            userId={userId}
+            currentUser={{ ...user, id: userId }}
             isTeacher={isTeacher}
             roomPermissions={currentPermissions}
           />
