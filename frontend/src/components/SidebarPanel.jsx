@@ -229,7 +229,7 @@ const SidebarPanel = ({
   const togglePermission = (participantId, permissionType) => {
     if (!isHost) return;
     
-    const participant = participants.find(p => p.id === participantId);
+    const participant = participants.find(p => String(p.id) === String(participantId));
     if (!participant) return;
 
     const currentValue = participant.permissions?.[permissionType];

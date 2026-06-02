@@ -30,9 +30,18 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     const needsVideo = canUseCamera;
     const needsAudio = canUseMic;
 
+    // If both off, we can stop the tracks to save power/privacy
+    if (!needsVideo && !needsAudio) {
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        setLocalStream(null);
+      }
+      return;
+    }
+
     try {
+      // If we don't have a stream yet, get one
       if (!localStream) {
-        // First time initialization
         const stream = await navigator.mediaDevices.getUserMedia({
           video: needsVideo ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
           audio: needsAudio
@@ -44,16 +53,49 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
           stream.getTracks().forEach(track => pc.addTrack(track, stream));
         });
       } else {
-        // Update existing tracks
+        // We have a stream, check if we need to add missing tracks
         const videoTrack = localStream.getVideoTracks()[0];
         const audioTrack = localStream.getAudioTracks()[0];
 
-        if (videoTrack) {
-          videoTrack.enabled = needsVideo && !isVideoOff;
+        // If we need video but don't have it, get it
+        if (needsVideo && (!videoTrack || videoTrack.readyState === 'ended')) {
+          const vStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          const vTrack = vStream.getVideoTracks()[0];
+          localStream.addTrack(vTrack);
+          
+          // Update all peer connections
+          Object.values(peerConnections.current).forEach(pc => {
+            const senders = pc.getSenders();
+            const sender = senders.find(s => s.track?.kind === 'video');
+            if (sender) {
+              sender.replaceTrack(vTrack);
+            } else {
+              pc.addTrack(vTrack, localStream);
+            }
+          });
         }
-        if (audioTrack) {
-          audioTrack.enabled = needsAudio && !isAudioMuted;
+
+        // If we need audio but don't have it, get it
+        if (needsAudio && (!audioTrack || audioTrack.readyState === 'ended')) {
+          const aStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const aTrack = aStream.getAudioTracks()[0];
+          localStream.addTrack(aTrack);
+          
+          // Update all peer connections
+          Object.values(peerConnections.current).forEach(pc => {
+            const senders = pc.getSenders();
+            const sender = senders.find(s => s.track?.kind === 'audio');
+            if (sender) {
+              sender.replaceTrack(aTrack);
+            } else {
+              pc.addTrack(aTrack, localStream);
+            }
+          });
         }
+
+        // Sync enabled states
+        if (localStream.getVideoTracks()[0]) localStream.getVideoTracks()[0].enabled = needsVideo && !isVideoOff;
+        if (localStream.getAudioTracks()[0]) localStream.getAudioTracks()[0].enabled = needsAudio && !isAudioMuted;
       }
     } catch (err) {
       console.error('Media Access Error:', err);

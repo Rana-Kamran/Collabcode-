@@ -20,7 +20,7 @@ module.exports = (io) => {
         }
       };
 
-      const existingUserIndex = roomsData[roomId].participants.findIndex(p => p.id === user.id);
+      const existingUserIndex = roomsData[roomId].participants.findIndex(p => String(p.id) === String(user.id));
       if (existingUserIndex > -1) {
         roomsData[roomId].participants[existingUserIndex] = newUser;
       } else {
@@ -35,7 +35,7 @@ module.exports = (io) => {
       
       socket.on('update-permission', ({ targetUserId, permission, value }) => {
         if (roomsData[roomId]) {
-          const userToUpdate = roomsData[roomId].participants.find(p => p.id === targetUserId);
+          const userToUpdate = roomsData[roomId].participants.find(p => String(p.id) === String(targetUserId));
           if (userToUpdate) {
             if (!userToUpdate.permissions) userToUpdate.permissions = {};
             userToUpdate.permissions[permission] = value;
