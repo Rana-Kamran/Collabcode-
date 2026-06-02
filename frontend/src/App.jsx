@@ -109,7 +109,14 @@ function App() {
   const handleExitRoom = () => {
     setCurrentRoom(null);
     localStorage.removeItem('collabcode-current-room');
-    setCurrentScreen(role === 'teacher' ? 'teacher-dashboard' : 'student-dashboard');
+    
+    // Use user.role from the state which is more reliable
+    const userRole = (user?.role || role || '').toLowerCase();
+    if (userRole === 'teacher') {
+      setCurrentScreen('teacher-dashboard');
+    } else {
+      setCurrentScreen('student-dashboard');
+    }
   };
 
   const handleLogout = () => {
