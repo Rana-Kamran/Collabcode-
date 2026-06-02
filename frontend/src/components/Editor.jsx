@@ -102,7 +102,7 @@ for(let i = 1; i <= 5; i++) {
   const [isConnected, setIsConnected] = useState(false);
   const [otherCursors, setOtherCursors] = useState({});
   const [typingUsers, setTypingUsers] = useState([]);
-  const isLocalChange = useRef(false);
+  const isApplyingRemoteChange = useRef(false);
   const typingTimeoutRef = useRef(null);
 
   // Languages with proper file names
@@ -143,15 +143,23 @@ for(let i = 1; i <= 5; i++) {
     socket.on('disconnect', () => setIsConnected(false));
 
     socket.on('code-update', (data) => {
-      if (!isLocalChange.current && data.userId !== socket.id) {
+      if (data.userId !== socket.id) {
         const newCode = data.code;
-        setCode(newCode);
-        if (editorRef.current) {
+        
+        // Only update if code is actually different to avoid redundant work and cursor jumps
+        if (editorRef.current && editorRef.current.getValue() !== newCode) {
+          isApplyingRemoteChange.current = true;
+          
+          const position = editorRef.current.getPosition();
           editorRef.current.setValue(newCode);
+          if (position) {
+            editorRef.current.setPosition(position);
+          }
+          
+          setCode(newCode);
+          isApplyingRemoteChange.current = false;
         }
-        showToast(`${data.userName} made changes`);
       }
-      isLocalChange.current = false;
     });
 
     socket.on('cursor-update', (data) => {
@@ -286,9 +294,13 @@ for(let i = 1; i <= 5; i++) {
   };
 
   const handleCodeChange = (newCode) => {
+    if (isApplyingRemoteChange.current) return;
+
+    // Only proceed if code changed to avoid unnecessary re-renders and emits
+    if (newCode === code) return;
+
     setCode(newCode);
-    isLocalChange.current = true;
-    
+
     if (language === 'html') {
       setHtmlCode(newCode);
     } else if (language === 'css') {
@@ -296,7 +308,7 @@ for(let i = 1; i <= 5; i++) {
     } else if (language === 'javascript') {
       setJsCode(newCode);
     }
-    
+
     if (socket && isConnected && roomId) {
       socket.emit('code-change', {
         roomId: roomId,

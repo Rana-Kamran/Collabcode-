@@ -102,12 +102,6 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
       showToast('A user left the room');
     });
 
-    newSocket.on('code-update', (data) => {
-      if (editorRef.current && data.userId !== newSocket.id) {
-        editorRef.current.setValue(data.code);
-      }
-    });
-
     newSocket.on('room-ended', () => {
       showToast('Room has been ended by the host', 'warning');
       setTimeout(() => onLogout(), 2000);
