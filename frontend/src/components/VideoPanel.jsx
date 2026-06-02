@@ -27,77 +27,52 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
 
   // ========== INITIALIZE LOCAL MEDIA ==========
   const initMedia = async () => {
-    const needsVideo = canUseCamera;
-    const needsAudio = canUseMic;
-    
-    console.log('Syncing Media Permissions:', { needsVideo, needsAudio });
-    
-    // 1. Handle Permission Revocation (Stop tracks immediately)
-    if (localStream) {
-      localStream.getTracks().forEach(track => {
-        if ((track.kind === 'video' && !needsVideo) || (track.kind === 'audio' && !needsAudio)) {
-          console.log(`Stopping ${track.kind} track due to permission revocation`);
-          track.stop();
-          localStream.removeTrack(track);
-          
-          // Also remove from all active peer connections to stop sending to others
-          Object.values(peerConnections.current).forEach(pc => {
-            const senders = pc.getSenders();
-            const sender = senders.find(s => s.track?.kind === track.kind);
-            if (sender) {
-              try {
-                pc.removeTrack(sender);
-              } catch (e) {
-                console.error('Error removing track from PC:', e);
-              }
-            }
-          });
-        }
-      });
-    }
-
-    // 2. If both disabled, clear local stream state
-    if (!needsVideo && !needsAudio) {
-      if (localStream) setLocalStream(null);
+    // If no permissions at all, stop everything and return
+    if (!canUseMic && !canUseCamera) {
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        setLocalStream(null);
+      }
       return;
     }
 
-    // 3. Request new tracks if they are needed but missing
     try {
-      const hasVideo = localStream?.getVideoTracks().some(t => t.readyState === 'live');
-      const hasAudio = localStream?.getAudioTracks().some(t => t.readyState === 'live');
-
-      if ((needsVideo && !hasVideo) || (needsAudio && !hasAudio)) {
-        const newStream = await navigator.mediaDevices.getUserMedia({
-          video: needsVideo ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
-          audio: needsAudio
+      // If we don't have a stream yet, get one
+      if (!localStream) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: canUseCamera ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
+          audio: canUseMic
         });
-
-        let updatedStream = localStream || new MediaStream();
+        setLocalStream(stream);
         
-        newStream.getTracks().forEach(track => {
-          // If we already have a track of this kind, remove it first
-          const oldTrack = updatedStream.getTracks().find(t => t.kind === track.kind);
-          if (oldTrack) {
-            oldTrack.stop();
-            updatedStream.removeTrack(oldTrack);
-          }
-          
-          updatedStream.addTrack(track);
-          
-          // Update all peer connections
-          Object.values(peerConnections.current).forEach(pc => {
-            const senders = pc.getSenders();
-            const sender = senders.find(s => s.track?.kind === track.kind);
-            if (sender) {
-              sender.replaceTrack(track);
-            } else {
-              pc.addTrack(track, updatedStream);
-            }
-          });
+        // Add to all existing peer connections
+        Object.values(peerConnections.current).forEach(pc => {
+          stream.getTracks().forEach(track => pc.addTrack(track, stream));
         });
+      } else {
+        // If we have a stream, just enable/disable tracks based on permissions
+        const videoTrack = localStream.getVideoTracks()[0];
+        const audioTrack = localStream.getAudioTracks()[0];
 
-        setLocalStream(updatedStream);
+        if (videoTrack) {
+          videoTrack.enabled = canUseCamera && !isVideoOff;
+        } else if (canUseCamera) {
+          // If we need video but don't have a track, we might need a new getUserMedia
+          // or we just wait for a refresh. For simplicity, let's try to get it.
+          const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          const newTrack = newStream.getVideoTracks()[0];
+          localStream.addTrack(newTrack);
+          Object.values(peerConnections.current).forEach(pc => pc.addTrack(newTrack, localStream));
+        }
+
+        if (audioTrack) {
+          audioTrack.enabled = canUseMic && !isAudioMuted;
+        } else if (canUseMic) {
+          const newStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const newTrack = newStream.getAudioTracks()[0];
+          localStream.addTrack(newTrack);
+          Object.values(peerConnections.current).forEach(pc => pc.addTrack(newTrack, localStream));
+        }
       }
     } catch (err) {
       console.error('Media Access Error:', err);
@@ -105,9 +80,19 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     }
   };
 
+  // Sync track states whenever permissions or local buttons change
+  useEffect(() => {
+    if (localStream) {
+      const vTrack = localStream.getVideoTracks()[0];
+      const aTrack = localStream.getAudioTracks()[0];
+      if (vTrack) vTrack.enabled = canUseCamera && !isVideoOff;
+      if (aTrack) aTrack.enabled = canUseMic && !isAudioMuted;
+    }
+  }, [canUseMic, canUseCamera, isVideoOff, isAudioMuted, localStream]);
+
   useEffect(() => {
     initMedia();
-  }, [canUseMic, canUseCamera, roomId]);
+  }, [canUseMic, canUseCamera]); 
 
   useEffect(() => {
     return () => {
@@ -123,7 +108,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     if (!socket || !roomId || !userId) return;
 
     socket.on('video-offer', async ({ offer, fromId }) => {
-      console.log('Signaling: Received offer from', fromId);
+      console.log('WebRTC: Offer from', fromId);
       try {
         const pc = getOrCreatePeerConnection(fromId);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
@@ -131,51 +116,37 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
         await pc.setLocalDescription(answer);
         socket.emit('video-answer', { roomId, answer, targetId: fromId });
       } catch (e) {
-        console.error('Error handling offer:', e);
+        console.error('WebRTC: Offer error', e);
       }
     });
 
     socket.on('video-answer', async ({ answer, fromId }) => {
-      console.log('Signaling: Received answer from', fromId);
-      try {
-        const pc = peerConnections.current[fromId];
-        if (pc) {
+      console.log('WebRTC: Answer from', fromId);
+      const pc = peerConnections.current[fromId];
+      if (pc) {
+        try {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        } catch (e) {
+          console.error('WebRTC: Answer error', e);
         }
-      } catch (e) {
-        console.error('Error handling answer:', e);
       }
     });
 
     socket.on('video-ice-candidate', async ({ candidate, fromId }) => {
-      try {
-        const pc = peerConnections.current[fromId];
-        if (pc && candidate) {
+      const pc = peerConnections.current[fromId];
+      if (pc && candidate) {
+        try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.error('WebRTC: ICE error', e);
         }
-      } catch (e) {
-        console.error('Error adding ICE candidate:', e);
       }
-    });
-
-    socket.on('user-left-video', ({ userId: leftId }) => {
-      console.log('User left video:', leftId);
-      if (peerConnections.current[leftId]) {
-        peerConnections.current[leftId].close();
-        delete peerConnections.current[leftId];
-      }
-      setRemoteStreams(prev => {
-        const next = { ...prev };
-        delete next[leftId];
-        return next;
-      });
     });
 
     return () => {
       socket.off('video-offer');
       socket.off('video-answer');
       socket.off('video-ice-candidate');
-      socket.off('user-left-video');
     };
   }, [socket, roomId, userId, localStream]);
 
@@ -183,16 +154,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     if (peerConnections.current[targetId]) return peerConnections.current[targetId];
 
     const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' },
-        { urls: 'stun:global.stun.twilio.com:3478' },
-        { urls: 'stun:relay.metered.ca:80' }
-      ],
-      iceCandidatePoolSize: 10,
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     });
 
     peerConnections.current[targetId] = pc;
@@ -208,27 +170,23 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
     };
 
     pc.ontrack = (e) => {
-      console.log('WebRTC: Received remote stream for', targetId);
+      console.log('WebRTC: Track received from', targetId);
       setRemoteStreams(prev => ({ ...prev, [targetId]: e.streams[0] }));
-    };
-
-    pc.onconnectionstatechange = () => {
-      console.log(`Connection state with ${targetId}: ${pc.connectionState}`);
     };
 
     return pc;
   };
 
-  // Connection trigger: Use a stable condition to avoid glare
   useEffect(() => {
     if (!localStream || !socket || !participants || !userId) return;
 
     participants.forEach(p => {
-      const pId = p.id || p._id;
-      if (pId && pId !== userId && !peerConnections.current[pId]) {
-        // Deterministic: Peer with lexicographically "larger" ID initiates
-        if (String(userId) > String(pId)) {
-          console.log('WebRTC: Initiating connection to', pId);
+      const pId = String(p.id || p._id || p.socketId);
+      if (pId && pId !== String(userId) && !peerConnections.current[pId]) {
+        // Teacher always initiates or use string comparison to avoid glare
+        const shouldInitiate = isHost || String(userId) > String(pId);
+        if (shouldInitiate) {
+          console.log('WebRTC: Connecting to', pId);
           const pc = getOrCreatePeerConnection(pId);
           pc.createOffer().then(offer => {
             pc.setLocalDescription(offer);
@@ -240,21 +198,32 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
   }, [participants, localStream, userId]);
 
   const allVideoFeeds = [
-    { id: userId, name: 'You (Local)', stream: localStream, isLocal: true, isOff: isVideoOff || !!mediaError },
+    { 
+      id: userId, 
+      name: 'You (Local)', 
+      stream: localStream, 
+      isLocal: true, 
+      isOff: isVideoOff || !canUseCamera || !!mediaError,
+      isMuted: isAudioMuted || !canUseMic
+    },
     ...Object.entries(remoteStreams).map(([id, stream]) => {
-      // Robust lookup: check id, _id, and socketId against the remote stream id
       const participant = participants?.find(p => 
         String(p.id) === String(id) || 
         String(p._id) === String(id) || 
         String(p.socketId) === String(id)
       );
 
+      // Force UI to show "Camera Off" if teacher revoked their permission
+      const remoteCameraOff = participant?.permissions?.useCamera === false;
+      const remoteMicOff = participant?.permissions?.useMicrophone === false;
+
       return {
         id,
-        name: participant?.name || participant?.username || participant?.user?.name || 'Remote User',
+        name: participant?.name || participant?.username || 'User ' + id.slice(-4),
         stream,
         isLocal: false,
-        isOff: false
+        isOff: remoteCameraOff,
+        isMuted: remoteMicOff
       };
     })
   ];
@@ -277,7 +246,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
                 <video 
                   autoPlay 
                   playsInline 
-                  muted={feed.isLocal}
+                  muted={feed.isLocal || feed.isMuted}
                   ref={el => { 
                     if (el && feed.stream && el.srcObject !== feed.stream) {
                       el.srcObject = feed.stream; 
@@ -285,48 +254,49 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
                   }}
                   className={feed.isOff ? 'hidden' : ''}
                 />
-                {feed.isOff && (
+                {(feed.isOff) && (
                   <div className="no-video">
-                    {mediaError ? <FaExclamationTriangle style={{color: '#e74c3c'}} /> : <FaVideoSlash />}
-                    <span style={{fontSize: '10px', textAlign: 'center', padding: '0 5px'}}>
-                      {mediaError ? `Error: ${mediaError}` : 'Camera Off'}
-                    </span>
-                    {mediaError && (
-                      <button className="btn btn-outline btn-sm" style={{marginTop: '5px', fontSize: '10px'}} onClick={initMedia}>
-                        Retry
-                      </button>
-                    )}
+                    <FaVideoSlash />
+                    <span style={{fontSize: '10px'}}>{feed.isLocal && mediaError ? 'Error' : 'Camera Off'}</span>
                   </div>
                 )}
-                <div className="participant-label">{feed.name}</div>
-              </div>
-            ))}
-            
-            {allVideoFeeds.length === 1 && !mediaError && (
-              <div className="video-feed empty">
-                <div className="no-video">
-                  <span>Waiting for others...</span>
+                <div className="participant-label">
+                  {feed.name} {feed.isMuted ? '🔇' : ''}
                 </div>
               </div>
-            )}
+            ))}
           </div>
           
           <div className="video-controls">
-            <button className={`control-btn ${isAudioMuted ? 'muted' : ''}`} onClick={() => {
-              if (localStream) {
-                const t = localStream.getAudioTracks()[0];
-                if (t) { t.enabled = !t.enabled; setIsAudioMuted(!t.enabled); }
-              }
-            }}>
-              {isAudioMuted ? <FaMicrophoneSlash /> : <FaMicrophone />}
+            <button 
+              className={`control-btn ${isAudioMuted || !canUseMic ? 'muted' : ''}`} 
+              disabled={!canUseMic}
+              onClick={() => {
+                if (localStream) {
+                  const t = localStream.getAudioTracks()[0];
+                  if (t) { 
+                    t.enabled = !t.enabled; 
+                    setIsAudioMuted(!t.enabled); 
+                  }
+                }
+              }}
+            >
+              {isAudioMuted || !canUseMic ? <FaMicrophoneSlash /> : <FaMicrophone />}
             </button>
-            <button className={`control-btn ${isVideoOff ? 'off' : ''}`} onClick={() => {
-              if (localStream) {
-                const t = localStream.getVideoTracks()[0];
-                if (t) { t.enabled = !t.enabled; setIsVideoOff(!t.enabled); }
-              }
-            }}>
-              {isVideoOff ? <FaVideoSlash /> : <FaVideo />}
+            <button 
+              className={`control-btn ${isVideoOff || !canUseCamera ? 'off' : ''}`} 
+              disabled={!canUseCamera}
+              onClick={() => {
+                if (localStream) {
+                  const t = localStream.getVideoTracks()[0];
+                  if (t) { 
+                    t.enabled = !t.enabled; 
+                    setIsVideoOff(!t.enabled); 
+                  }
+                }
+              }}
+            >
+              {isVideoOff || !canUseCamera ? <FaVideoSlash /> : <FaVideo />}
             </button>
             <button className="control-btn leave-btn" onClick={() => window.location.reload()}><FaPhoneSlash /></button>
           </div>
