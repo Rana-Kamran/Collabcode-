@@ -106,12 +106,16 @@ const MainApp = ({ user, role, currentRoom, onLogout, showToast }) => {
     });
 
     newSocket.on('user-joined', (data) => {
-      setParticipants(prev => [...prev, data.user]);
+      setParticipants(prev => {
+        // Remove existing entry for the same user ID to prevent duplicates
+        const filtered = prev.filter(p => String(p.id) !== String(data.user.id));
+        return [...filtered, data.user];
+      });
       showToast(`${data.user.name} joined the room`);
     });
 
     newSocket.on('user-left', (data) => {
-      setParticipants(prev => prev.filter(p => p.id !== data.userId));
+      setParticipants(prev => prev.filter(p => String(p.id) !== String(data.userId)));
       showToast('A user left the room');
     });
 

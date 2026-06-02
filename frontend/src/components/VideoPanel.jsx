@@ -197,11 +197,29 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, currentUser
       });
     });
 
+    socket.on('user-joined', ({ user: newUser }) => {
+      console.log('WebRTC: User re-joined, cleaning up stale connection', newUser.id);
+      const pId = String(newUser.id);
+      if (peerConnections.current[pId]) {
+        peerConnections.current[pId].close();
+        delete peerConnections.current[pId];
+        setRemoteStreams(prev => {
+          if (prev[pId]) {
+            const next = { ...prev };
+            delete next[pId];
+            return next;
+          }
+          return prev;
+        });
+      }
+    });
+
     return () => {
       socket.off('video-offer');
       socket.off('video-answer');
       socket.off('video-ice-candidate');
       socket.off('participants-update');
+      socket.off('user-joined');
     };
   }, [socket, roomId, userId, localStream]);
 
