@@ -35,30 +35,28 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     }
 
     try {
-      let stream = localStream;
-      
-      if (!stream) {
-        stream = await navigator.mediaDevices.getUserMedia({
+      if (!localStream) {
+        const stream = await navigator.mediaDevices.getUserMedia({
           video: needsVideo ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
           audio: needsAudio
         });
         setLocalStream(stream);
       } else {
-        const videoTrack = stream.getVideoTracks()[0];
-        const audioTrack = stream.getAudioTracks()[0];
+        const videoTrack = localStream.getVideoTracks()[0];
+        const audioTrack = localStream.getAudioTracks()[0];
 
         if (needsVideo && (!videoTrack || videoTrack.readyState === 'ended')) {
           const vStream = await navigator.mediaDevices.getUserMedia({ video: true });
-          stream.addTrack(vStream.getVideoTracks()[0]);
+          localStream.addTrack(vStream.getVideoTracks()[0]);
         }
 
         if (needsAudio && (!audioTrack || audioTrack.readyState === 'ended')) {
           const aStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.addTrack(aStream.getAudioTracks()[0]);
+          localStream.addTrack(aStream.getAudioTracks()[0]);
         }
 
-        stream.getVideoTracks().forEach(t => t.enabled = needsVideo && !isVideoOff);
-        stream.getAudioTracks().forEach(t => t.enabled = needsAudio && !isAudioMuted);
+        localStream.getVideoTracks().forEach(t => t.enabled = needsVideo && !isVideoOff);
+        localStream.getAudioTracks().forEach(t => t.enabled = needsAudio && !isAudioMuted);
       }
     } catch (err) {
       console.error('Media Access Error:', err);
@@ -178,12 +176,13 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
         });
         
         // INSTANT RE-INITIATION
-        // If the teacher re-joined, students should initiate immediately to reduce delay
         if (newUser.role?.toLowerCase() === 'teacher' || newUser.role?.toLowerCase() === 'host') {
-           const pc = getOrCreatePeerConnection(pId);
-           pc.createOffer()
-            .then(offer => pc.setLocalDescription(offer))
-            .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId: pId }));
+           setTimeout(() => {
+             const pc = getOrCreatePeerConnection(pId);
+             pc.createOffer()
+              .then(offer => pc.setLocalDescription(offer))
+              .then(() => socket.emit('video-offer', { roomId, offer: pc.localDescription, targetId: pId }));
+           }, 500); // Tiny delay to allow teacher to setup socket
         }
       }
     });
@@ -195,13 +194,19 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
       socket.off('participants-update');
       socket.off('user-joined');
     };
-  }, [socket, roomId, userId, localStream]); // localStream added to dep list for reactive cleanup
+  }, [socket, roomId, userId]);
 
   const getOrCreatePeerConnection = (targetId) => {
     if (peerConnections.current[targetId]) return peerConnections.current[targetId];
 
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
+      ]
     });
 
     peerConnections.current[targetId] = pc;
@@ -244,7 +249,6 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
     participants.forEach(p => {
       const pId = String(p.id);
       if (pId && pId !== String(userId) && !peerConnections.current[pId]) {
-        // Teacher always initiates OR students initiate to teacher
         const isTargetTeacher = p.role?.toLowerCase() === 'teacher' || p.role?.toLowerCase() === 'host';
         const shouldInitiate = isHost || isTargetTeacher || String(userId) > String(pId);
         
