@@ -130,9 +130,11 @@ const SidebarPanel = ({
   const sendMessage = () => {
     if (!newMessage.trim()) return;
     
+    const actualName = user?.name || user?.username || 'User';
+    
     const message = {
       id: messages.length + 1,
-      sender: user?.name || 'You',
+      sender: actualName,
       content: newMessage,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isOwn: true
@@ -144,7 +146,7 @@ const SidebarPanel = ({
       socket.emit('send-message', {
         roomId: roomId,
         message: newMessage,
-        sender: user?.name || 'You',
+        sender: actualName,
         userId: socket.id
       });
     }
@@ -457,7 +459,7 @@ const SidebarPanel = ({
                 <div className="chat-messages">
                   {messages.map(msg => (
                     <div key={msg.id} className={`message ${msg.isOwn ? 'sent' : 'received'}`}>
-                      <div className="message-sender">{msg.sender}</div>
+                      <div className="message-sender">{msg.isOwn ? 'You' : msg.sender}</div>
                       <div className="message-content">{msg.content}</div>
                       <div className="message-time">{msg.time}</div>
                     </div>
