@@ -32,7 +32,8 @@ const SidebarPanel = ({
   user,
   participants,
   isTeacher,
-  roomPermissions
+  roomPermissions,
+  onUpdatePermission
 }) => {
   
   const [isMinimized, setIsMinimized] = useState(false);
