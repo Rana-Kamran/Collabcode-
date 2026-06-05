@@ -25,21 +25,34 @@ function App() {
     const savedToken = localStorage.getItem('collabcode-token');
     const savedRoom = localStorage.getItem('collabcode-current-room');
     
+    // Check for room in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    
     if (savedUser && savedRole && savedToken) {
-      setUser(JSON.parse(savedUser));
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
       setRole(savedRole);
       setToken(savedToken);
-      if (savedRoom) {
+
+      if (roomFromUrl) {
+        // Direct join if user is logged in
+        handleJoinRoom({ roomId: roomFromUrl, name: 'Direct Session' });
+      } else if (savedRoom) {
         setCurrentRoom(JSON.parse(savedRoom));
         setCurrentScreen('main-app');
       } else {
         setCurrentScreen(savedRole === 'teacher' ? 'teacher-dashboard' : 'student-dashboard');
       }
     } else {
-      // Loading to login transition
+      // If not logged in but has room in URL, we wait for login then redirect
+      if (roomFromUrl) {
+        localStorage.setItem('collabcode-pending-room', roomFromUrl);
+      }
+      
       const timer = setTimeout(() => {
         setCurrentScreen('login');
-      }, 5000);
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, []);
@@ -57,14 +70,19 @@ function App() {
       localStorage.setItem('collabcode-user', JSON.stringify(data.user));
       localStorage.setItem('collabcode-token', data.token);
       
-      if (data.user.role) {
-        const userRole = data.user.role.toLowerCase();
-        setRole(userRole);
-        localStorage.setItem('collabcode-role', userRole);
-        setCurrentScreen(userRole === 'teacher' ? 'teacher-dashboard' : 'student-dashboard');
+      const userRole = (data.user.role || 'student').toLowerCase();
+      setRole(userRole);
+      localStorage.setItem('collabcode-role', userRole);
+
+      // Check for pending room join
+      const pendingRoom = localStorage.getItem('collabcode-pending-room');
+      if (pendingRoom) {
+        localStorage.removeItem('collabcode-pending-room');
+        handleJoinRoom({ roomId: pendingRoom, name: 'Direct Session' });
       } else {
-        setCurrentScreen('role');
+        setCurrentScreen(userRole === 'teacher' ? 'teacher-dashboard' : 'student-dashboard');
       }
+
       showToast('Login successful!');
     } catch (err) {
       showToast(err.message, 'error');

@@ -1,38 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { FaPlus, FaCog, FaPlay, FaSignOutAlt, FaArrowLeft } from 'react-icons/fa';
+import React, { useState } from 'react';
+import { FaPlus, FaSignOutAlt, FaArrowLeft } from 'react-icons/fa';
 import './TeacherDashboard.css';
 import api from '../utils/api';
 
 const TeacherDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast }) => {
-  const [rooms, setRooms] = useState([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [newRoom, setNewRoom] = useState({
     name: '',
-    description: '',
-    permissions: {
-      editCode: true,
-      viewOnly: false,
-      useMicrophone: true,
-      useCamera: true,
-      shareScreen: true,
-      downloadCode: true
-    }
+    description: ''
   });
-
-  useEffect(() => {
-    const fetchRooms = async () => {
-      try {
-        const data = await api.get('/rooms', token);
-        // Backend returns all rooms, filter for teacher's own rooms if necessary 
-        // OR rely on backend to filter based on token
-        setRooms(data);
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    };
-    fetchRooms();
-  }, [token]);
 
   const handleCreateRoom = async () => {
     if (!newRoom.name.trim()) {
@@ -47,32 +24,14 @@ const TeacherDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast
         description: newRoom.description
       }, token);
 
-      setRooms([data, ...rooms]);
       setShowCreateForm(false);
-      setNewRoom({
-        name: '',
-        description: '',
-        permissions: {
-          editCode: true,
-          viewOnly: true,
-          useMicrophone: true,
-          useCamera: true,
-          shareScreen: true,
-          downloadCode: true
-        }
-      });
-      
-      showToast(`Room "${data.name}" created successfully! Code: ${data.roomId}`);
+      onJoinRoom(data); // Go straight to the room
+      showToast(`Room created successfully!`);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleStartRoom = (room) => {
-    onJoinRoom(room);
-    showToast(`Starting room: ${room.name}`);
   };
 
   return (
@@ -87,7 +46,7 @@ const TeacherDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast
             <FaArrowLeft /> Back
           </button>
           <div className="user-info">
-            <div className="user-avatar">{user?.avatar || 'T'}</div>
+            <div className="user-avatar">{user?.avatar || (user?.name || 'T').charAt(0).toUpperCase()}</div>
             <span className="user-name">{user?.name || 'Teacher'}</span>
           </div>
           <button className="btn btn-outline" onClick={onLogout}>
@@ -96,14 +55,19 @@ const TeacherDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast
         </div>
       </div>
 
-      <div className="dashboard-content">
-        <div className="dashboard-card">
-          <h2>Create New Room</h2>
+      <div className="dashboard-content single-card">
+        <div className="dashboard-card central-join-card">
+          <div className="card-header-icon">
+            <i className="fas fa-chalkboard-teacher"></i>
+          </div>
+          <h2>Start a Coding Session</h2>
+          <p className="card-subtitle">Create a private room and share the link with your students.</p>
           
           {!showCreateForm ? (
             <button 
-              className="btn btn-primary btn-lg"
+              className="btn btn-primary btn-lg full-width"
               onClick={() => setShowCreateForm(true)}
+              disabled={loading}
             >
               <FaPlus /> Create New Room
             </button>
@@ -115,17 +79,17 @@ const TeacherDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast
                   type="text"
                   value={newRoom.name}
                   onChange={(e) => setNewRoom({...newRoom, name: e.target.value})}
-                  placeholder="Enter room name"
+                  placeholder="e.g., Advanced JavaScript Class"
                   autoFocus
                 />
               </div>
 
               <div className="form-group">
-                <label>Description</label>
+                <label>Description (Optional)</label>
                 <textarea
                   value={newRoom.description}
                   onChange={(e) => setNewRoom({...newRoom, description: e.target.value})}
-                  placeholder="Enter room description"
+                  placeholder="What is this session about?"
                   rows="3"
                 />
               </div>
@@ -140,44 +104,11 @@ const TeacherDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast
                 <button 
                   className="btn btn-primary"
                   onClick={handleCreateRoom}
+                  disabled={loading}
                 >
-                  Create Room
+                  {loading ? 'Creating...' : 'Create & Start'}
                 </button>
               </div>
-            </div>
-          )}
-        </div>
-
-        <div className="dashboard-card">
-          <h2>My Rooms</h2>
-          {rooms.length === 0 ? (
-            <p className="empty-message">No rooms created yet. Create your first room to get started!</p>
-          ) : (
-            <div className="room-grid">
-              {rooms.map(room => (
-                <div key={room.id} className="room-card">
-                  <div className="room-card-header">
-                    <h3>{room.name}</h3>
-                    <span className="room-status">Active</span>
-                  </div>
-                  <div className="room-card-body">
-                    <p>{room.description || 'No description'}</p>
-                    <div className="room-details">
-                      <p><strong>Code:</strong> {room.roomId || room.id}</p>
-                      <p><strong>Students:</strong> {room.students}</p>
-                    </div>
-                  </div>
-                  <div className="room-card-actions">
-                    <button 
-                      className="btn btn-primary"
-                      onClick={() => handleStartRoom(room)}
-                    >
-                      <FaPlay /> Start
-                    </button>
-                    {/* Settings button removed */}
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </div>

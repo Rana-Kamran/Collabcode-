@@ -1,24 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { FaSignInAlt, FaArrowLeft, FaSignOutAlt } from 'react-icons/fa';
 import './StudentDashboard.css';
 import api from '../utils/api';
 
 const StudentDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast }) => {
   const [roomCode, setRoomCode] = useState('');
-  const [availableRooms, setAvailableRooms] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchRooms = async () => {
-      try {
-        const data = await api.get('/rooms', token);
-        setAvailableRooms(data);
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    };
-    fetchRooms();
-  }, [token]);
 
   const handleJoinWithCode = async () => {
     if (!roomCode.trim()) {
@@ -28,20 +15,7 @@ const StudentDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast
 
     setLoading(true);
     try {
-      const data = await api.post('/rooms/join', { roomId: roomCode.toUpperCase() }, token);
-      onJoinRoom(data);
-      showToast(`Joined room: ${data.name}`);
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleJoinRoom = async (room) => {
-    setLoading(true);
-    try {
-      const data = await api.post('/rooms/join', { roomId: room.roomId }, token);
+      const data = await api.post('/rooms/join', { roomId: roomCode.trim().toUpperCase() }, token);
       onJoinRoom(data);
       showToast(`Joined room: ${data.name}`);
     } catch (err) {
@@ -63,7 +37,7 @@ const StudentDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast
             <FaArrowLeft /> Back
           </button>
           <div className="user-info">
-            <div className="user-avatar">{user?.avatar || 'S'}</div>
+            <div className="user-avatar">{user?.avatar || (user?.name || 'S').charAt(0).toUpperCase()}</div>
             <span className="user-name">{user?.name || 'Student'}</span>
           </div>
           <button className="btn btn-outline" onClick={onLogout}>
@@ -72,9 +46,13 @@ const StudentDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast
         </div>
       </div>
 
-      <div className="dashboard-content">
-        <div className="dashboard-card">
-          <h2>Join a Room</h2>
+      <div className="dashboard-content single-card">
+        <div className="dashboard-card central-join-card">
+          <div className="card-header-icon">
+            <i className="fas fa-door-open"></i>
+          </div>
+          <h2>Join a Session</h2>
+          <p className="card-subtitle">Enter the secret code provided by your teacher to join the live room.</p>
           
           <div className="join-room-form">
             <div className="form-group">
@@ -82,48 +60,25 @@ const StudentDashboard = ({ user, token, onJoinRoom, onBack, onLogout, showToast
               <input
                 type="text"
                 value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                placeholder="Enter room code (e.g., ROOM123)"
-                maxLength="8"
+                onChange={(e) => setRoomCode(e.target.value)}
+                placeholder="e.g., A1B2C3"
+                maxLength="20"
+                autoFocus
               />
             </div>
             
             <button 
-              className="btn btn-primary btn-lg"
+              className={`btn btn-primary btn-lg full-width ${loading ? 'loading' : ''}`}
               onClick={handleJoinWithCode}
+              disabled={loading || !roomCode.trim()}
             >
-              <FaSignInAlt /> Join Room
+              {loading ? 'Joining...' : <><FaSignInAlt /> Join Now</>}
             </button>
           </div>
-        </div>
-
-        <div className="dashboard-card">
-          <h2>Available Rooms</h2>
           
-          <div className="room-grid">
-            {availableRooms.map(room => (
-              <div key={room.id} className="room-card">
-                <div className="room-card-header">
-                  <h3>{room.name}</h3>
-                  <span className="room-status">{room.students} students</span>
-                </div>
-                <div className="room-card-body">
-                  <p>{room.description}</p>
-                  <div className="room-details">
-                    <p><strong>Teacher:</strong> {room.teacher}</p>
-                    <p><strong>Code:</strong> {room.roomId || room.id}</p>
-                  </div>
-                </div>
-                <div className="room-card-actions">
-                  <button 
-                    className="btn btn-primary"
-                    onClick={() => handleJoinRoom(room)}
-                  >
-                    <FaSignInAlt /> Join Room
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="privacy-note">
+            <i className="fas fa-shield-alt"></i>
+            <span>Private sessions ensure only invited students can access the code.</span>
           </div>
         </div>
       </div>
