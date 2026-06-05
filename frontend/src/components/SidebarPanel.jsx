@@ -394,40 +394,52 @@ const SidebarPanel = ({
                             <span>⚙️ Manage {p.name}'s Permissions</span>
                             <button onClick={() => setOpenDropdownId(null)}><FaTimes size={10} /></button>
                           </div>
-                          <div className="permission-row" onClick={() => togglePermission(p.id, 'editCode')}>
+                          <div className="permission-row" onClick={(e) => { e.stopPropagation(); togglePermission(p.id, 'editCode'); }}>
                             <div className="permission-info">
                               <FaCode />
                               <span>Code Editor</span>
                             </div>
-                            <div className={`permission-status ${p.permissions?.editCode ? 'enabled' : 'disabled'}`}>
-                              {p.permissions?.editCode ? 
-                                <span style={{ color: '#4caf50' }}>✅ Enabled</span> : 
-                                <span style={{ color: '#f44336' }}>❌ Disabled</span>
-                              }
+                            <div className="permission-status">
+                              <label className="switch">
+                                <input 
+                                  type="checkbox" 
+                                  checked={p.permissions?.editCode} 
+                                  readOnly 
+                                />
+                                <span className="slider"></span>
+                              </label>
                             </div>
                           </div>
-                          <div className="permission-row" onClick={() => togglePermission(p.id, 'useMicrophone')}>
+                          <div className="permission-row" onClick={(e) => { e.stopPropagation(); togglePermission(p.id, 'useMicrophone'); }}>
                             <div className="permission-info">
                               {p.permissions?.useMicrophone ? <FaMicrophone /> : <FaMicrophoneSlash />}
                               <span>Microphone</span>
                             </div>
-                            <div className={`permission-status ${p.permissions?.useMicrophone ? 'enabled' : 'disabled'}`}>
-                              {p.permissions?.useMicrophone ? 
-                                <span style={{ color: '#4caf50' }}>✅ Enabled</span> : 
-                                <span style={{ color: '#f44336' }}>❌ Disabled</span>
-                              }
+                            <div className="permission-status">
+                              <label className="switch">
+                                <input 
+                                  type="checkbox" 
+                                  checked={p.permissions?.useMicrophone} 
+                                  readOnly 
+                                />
+                                <span className="slider"></span>
+                              </label>
                             </div>
                           </div>
-                          <div className="permission-row" onClick={() => togglePermission(p.id, 'useCamera')}>
+                          <div className="permission-row" onClick={(e) => { e.stopPropagation(); togglePermission(p.id, 'useCamera'); }}>
                             <div className="permission-info">
                               {p.permissions?.useCamera ? <FaVideo /> : <FaVideoSlash />}
                               <span>Camera</span>
                             </div>
-                            <div className={`permission-status ${p.permissions?.useCamera ? 'enabled' : 'disabled'}`}>
-                              {p.permissions?.useCamera ? 
-                                <span style={{ color: '#4caf50' }}>✅ Enabled</span> : 
-                                <span style={{ color: '#f44336' }}>❌ Disabled</span>
-                              }
+                            <div className="permission-status">
+                              <label className="switch">
+                                <input 
+                                  type="checkbox" 
+                                  checked={p.permissions?.useCamera} 
+                                  readOnly 
+                                />
+                                <span className="slider"></span>
+                              </label>
                             </div>
                           </div>
                           <div className="dropdown-divider" />
