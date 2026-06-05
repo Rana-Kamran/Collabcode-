@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaCopy, FaTimes } from 'react-icons/fa';
+import { FaCopy, FaTimes, FaWhatsapp } from 'react-icons/fa';
 import './InviteModal.css';
 
 const InviteModal = ({ room, onClose, showToast }) => {
@@ -10,6 +10,15 @@ const InviteModal = ({ room, onClose, showToast }) => {
   const handleCopy = (text, message) => {
     navigator.clipboard.writeText(text);
     showToast(message);
+  };
+
+  const handleWhatsAppShare = () => {
+    const message = `Hey! Join my coding session on CollabCode.
+Room Code: ${roomCode}
+Join Link: ${inviteLink}`;
+    
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   return (
@@ -60,6 +69,20 @@ const InviteModal = ({ room, onClose, showToast }) => {
         </div>
 
         <div className="invite-modal-footer">
+          <button 
+            className="btn btn-whatsapp" 
+            onClick={handleWhatsAppShare}
+            style={{ 
+              backgroundColor: '#25D366', 
+              color: 'white', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              border: 'none'
+            }}
+          >
+            <FaWhatsapp style={{ fontSize: '1.2rem' }} /> Share on WhatsApp
+          </button>
           <button className="btn btn-outline" onClick={onClose}>
             Close
           </button>
