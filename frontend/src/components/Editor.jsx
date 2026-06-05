@@ -162,6 +162,26 @@ for(let i = 1; i <= 5; i++) {
       }
     });
 
+    socket.on('output-update', (data) => {
+      if (data.userId !== socket.id) {
+        const outputFrame = document.getElementById('output-frame');
+        const outputContent = document.getElementById('output-content');
+        
+        if (!outputFrame || !outputContent) return;
+
+        if (data.type === 'html') {
+          outputFrame.srcdoc = data.content;
+          outputFrame.style.display = 'block';
+          outputContent.style.display = 'none';
+        } else {
+          outputFrame.style.display = 'none';
+          outputContent.style.display = 'block';
+          outputContent.innerHTML = data.content;
+        }
+        showToast(`${data.userName} ran the code`);
+      }
+    });
+
     socket.on('cursor-update', (data) => {
       if (data.userId !== socket.id) {
         setOtherCursors(prev => ({
@@ -341,15 +361,19 @@ for(let i = 1; i <= 5; i++) {
         );
       }
       
-      const blob = new Blob([combinedHTML], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      outputFrame.src = url;
+      outputFrame.srcdoc = combinedHTML;
       outputFrame.style.display = 'block';
       outputContent.style.display = 'none';
       
-      outputFrame.onload = () => {
-        URL.revokeObjectURL(url);
-      };
+      if (socket && isConnected && roomId) {
+        socket.emit('output-change', {
+          roomId: roomId,
+          type: 'html',
+          content: combinedHTML,
+          userId: socket.id,
+          userName: user?.name || 'User'
+        });
+      }
       
       showToast('Website preview with CSS and JavaScript!');
       
@@ -374,15 +398,19 @@ for(let i = 1; i <= 5; i++) {
 </body>
 </html>`;
       
-      const blob = new Blob([previewHTML], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      outputFrame.src = url;
+      outputFrame.srcdoc = previewHTML;
       outputFrame.style.display = 'block';
       outputContent.style.display = 'none';
       
-      outputFrame.onload = () => {
-        URL.revokeObjectURL(url);
-      };
+      if (socket && isConnected && roomId) {
+        socket.emit('output-change', {
+          roomId: roomId,
+          type: 'html',
+          content: previewHTML,
+          userId: socket.id,
+          userName: user?.name || 'User'
+        });
+      }
       
       showToast('CSS preview updated!');
       
@@ -430,10 +458,32 @@ for(let i = 1; i <= 5; i++) {
           outputText = '✅ Code executed successfully (no output)';
         }
         
-        outputContent.innerHTML = outputText.replace(/\n/g, '<br>');
+        const finalContent = outputText.replace(/\n/g, '<br>');
+        outputContent.innerHTML = finalContent;
+
+        if (socket && isConnected && roomId) {
+          socket.emit('output-change', {
+            roomId: roomId,
+            type: 'logs',
+            content: finalContent,
+            userId: socket.id,
+            userName: user?.name || 'User'
+          });
+        }
         
       } catch (error) {
-        outputContent.innerHTML = `❌ Error: ${error.message}<br><br>Stack trace:<br>${error.stack}`;
+        const errorContent = `❌ Error: ${error.message}<br><br>Stack trace:<br>${error.stack}`;
+        outputContent.innerHTML = errorContent;
+
+        if (socket && isConnected && roomId) {
+          socket.emit('output-change', {
+            roomId: roomId,
+            type: 'logs',
+            content: errorContent,
+            userId: socket.id,
+            userName: user?.name || 'User'
+          });
+        }
       } finally {
         console.log = originalConsole.log;
         console.error = originalConsole.error;

@@ -100,6 +100,10 @@ module.exports = (io) => {
         socket.to(roomId).emit('new-message', data);
       });
 
+      socket.on('output-change', (data) => {
+        socket.to(roomId).emit('output-update', data);
+      });
+
       socket.on('video-offer', (data) => {
         const target = roomsData[roomId].participants.find(p => p.id === data.targetId);
         if (target) io.to(target.socketId).emit('video-offer', { ...data, fromId: user.id });
