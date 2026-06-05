@@ -68,21 +68,16 @@ Join Link: ${inviteLink}`;
           </div>
         </div>
 
+        <div className="share-options">
+          <p>Quick Share:</p>
+          <div className="share-buttons">
+            <button className="share-btn whatsapp" onClick={handleWhatsAppShare}>
+              <FaWhatsapp /> Share on WhatsApp
+            </button>
+          </div>
+        </div>
+
         <div className="invite-modal-footer">
-          <button 
-            className="btn btn-whatsapp" 
-            onClick={handleWhatsAppShare}
-            style={{ 
-              backgroundColor: '#25D366', 
-              color: 'white', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px',
-              border: 'none'
-            }}
-          >
-            <FaWhatsapp style={{ fontSize: '1.2rem' }} /> Share on WhatsApp
-          </button>
           <button className="btn btn-outline" onClick={onClose}>
             Close
           </button>
