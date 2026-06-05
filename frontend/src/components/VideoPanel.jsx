@@ -190,7 +190,22 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' }
+        { urls: 'stun:stun2.l.google.com:19302' },
+        {
+          urls: "turn:global.relay.metered.ca:80",
+          username: "9ae35ae665823d0827b19e14",
+          credential: "BU6EWG97SQj5M6J6"
+        },
+        {
+          urls: "turn:global.relay.metered.ca:443",
+          username: "9ae35ae665823d0827b19e14",
+          credential: "BU6EWG97SQj5M6J6"
+        },
+        {
+          urls: "turns:global.relay.metered.ca:443?transport=tcp",
+          username: "9ae35ae665823d0827b19e14",
+          credential: "BU6EWG97SQj5M6J6"
+        }
       ]
     });
 
