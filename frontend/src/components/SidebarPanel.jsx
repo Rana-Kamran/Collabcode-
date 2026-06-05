@@ -89,6 +89,9 @@ const SidebarPanel = ({
       }
     });
 
+    // Explicitly removed participants-update listener here to avoid prop-state conflicts.
+    // MainApp.jsx handles the global participants state which flows down as a prop.
+
     return () => {
       socket.off('new-message');
       socket.off('user-typing');
