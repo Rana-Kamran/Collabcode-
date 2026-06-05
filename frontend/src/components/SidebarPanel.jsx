@@ -65,9 +65,10 @@ const SidebarPanel = ({
       setMessages(prev => [...prev, {
         id: prev.length + 1,
         sender: data.sender,
+        senderId: data.senderId,
         content: data.message,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isOwn: false
+        isOwn: String(data.senderId) === String(user?.id)
       }]);
     });
 
@@ -131,10 +132,12 @@ const SidebarPanel = ({
     if (!newMessage.trim()) return;
     
     const actualName = user?.name || user?.username || 'User';
+    const senderId = user?.id || user?._id;
     
     const message = {
       id: messages.length + 1,
       sender: actualName,
+      senderId: senderId,
       content: newMessage,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isOwn: true
@@ -147,6 +150,7 @@ const SidebarPanel = ({
         roomId: roomId,
         message: newMessage,
         sender: actualName,
+        senderId: senderId,
         userId: socket.id
       });
     }
