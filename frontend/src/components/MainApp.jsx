@@ -137,6 +137,32 @@ const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) =
     };
   }, [roomId, user, role]);
 
+  const handleUpdatePermission = (targetUserId, permission, value) => {
+    // 1. Optimistic Update (Immediate visual feedback)
+    setParticipants(prev => prev.map(p => {
+      if (String(p.id) === String(targetUserId)) {
+        return {
+          ...p,
+          permissions: {
+            ...p.permissions,
+            [permission]: value
+          }
+        };
+      }
+      return p;
+    }));
+
+    // 2. Emit to server
+    if (socket && isConnected && roomId) {
+      socket.emit('update-permission', {
+        roomId: roomId,
+        targetUserId: targetUserId,
+        permission: permission,
+        value: value
+      });
+    }
+  };
+
   const togglePanel = (panel) => {
     setPanels(prev => ({ ...prev, [panel]: !prev[panel] }));
   };
@@ -257,6 +283,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) =
             user={{ ...user, id: userId }}
             isTeacher={isTeacher}
             roomPermissions={currentPermissions}
+            onUpdatePermission={handleUpdatePermission}
           />
         )}
 

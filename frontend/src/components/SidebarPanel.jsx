@@ -232,16 +232,9 @@ const SidebarPanel = ({
     const currentValue = participant.permissions?.[permissionType];
     const newValue = !currentValue;
 
-    if (socket && roomId) {
-      socket.emit('update-permission', {
-        roomId: roomId,
-        targetUserId: participantId,
-        permission: permissionType,
-        value: newValue
-      });
-      
-      // The visual update will happen when 'participants-update' is received from the server
-      // and the 'participants' prop is updated in the parent component.
+    // Use the optimistic update handler from MainApp
+    if (onUpdatePermission) {
+      onUpdatePermission(participantId, permissionType, newValue);
     }
   };
 
