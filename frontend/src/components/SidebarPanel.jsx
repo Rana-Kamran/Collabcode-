@@ -403,14 +403,9 @@ const SidebarPanel = ({
                               <span>Code Editor</span>
                             </div>
                             <div className="permission-status">
-                              <label className="switch">
-                                <input 
-                                  type="checkbox" 
-                                  checked={p.permissions?.editCode} 
-                                  readOnly 
-                                />
-                                <span className="slider"></span>
-                              </label>
+                              <div className={`custom-checkbox ${p.permissions?.editCode ? 'checked' : ''}`}>
+                                {p.permissions?.editCode && <FaCheck size={10} />}
+                              </div>
                             </div>
                           </div>
                           <div className="permission-row" onClick={(e) => { e.stopPropagation(); togglePermission(p.id, 'useMicrophone'); }}>
@@ -419,14 +414,9 @@ const SidebarPanel = ({
                               <span>Microphone</span>
                             </div>
                             <div className="permission-status">
-                              <label className="switch">
-                                <input 
-                                  type="checkbox" 
-                                  checked={p.permissions?.useMicrophone} 
-                                  readOnly 
-                                />
-                                <span className="slider"></span>
-                              </label>
+                              <div className={`custom-checkbox ${p.permissions?.useMicrophone ? 'checked' : ''}`}>
+                                {p.permissions?.useMicrophone && <FaCheck size={10} />}
+                              </div>
                             </div>
                           </div>
                           <div className="permission-row" onClick={(e) => { e.stopPropagation(); togglePermission(p.id, 'useCamera'); }}>
@@ -435,14 +425,9 @@ const SidebarPanel = ({
                               <span>Camera</span>
                             </div>
                             <div className="permission-status">
-                              <label className="switch">
-                                <input 
-                                  type="checkbox" 
-                                  checked={p.permissions?.useCamera} 
-                                  readOnly 
-                                />
-                                <span className="slider"></span>
-                              </label>
+                              <div className={`custom-checkbox ${p.permissions?.useCamera ? 'checked' : ''}`}>
+                                {p.permissions?.useCamera && <FaCheck size={10} />}
+                              </div>
                             </div>
                           </div>
                           <div className="dropdown-divider" />
