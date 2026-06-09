@@ -31,6 +31,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) =
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [participants, setParticipants] = useState([]);
+  const [roomData, setRoomData] = useState(null);
   
   // Default permissions: Teacher always has editCode, Student starts with true for all (host can then toggle)
   const [currentPermissions, setCurrentPermissions] = useState({
@@ -87,15 +88,12 @@ const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) =
 
     newSocket.on('room-data', (data) => {
       setParticipants(data.participants || []);
+      setRoomData(data);
       
       // Sync local permissions with data from server
       const localUser = data.participants?.find(p => String(p.id) === String(userId));
       if (localUser && localUser.permissions) {
         setCurrentPermissions(localUser.permissions);
-      }
-
-      if (editorRef.current && data.code) {
-        editorRef.current.setValue(data.code);
       }
     });
 
@@ -296,6 +294,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) =
           roomId={roomId}
           isTeacher={isTeacher}
           roomPermissions={currentPermissions}
+          roomData={roomData}
         />
 
         {panels.output && <OutputPanel showToast={showToast} />}

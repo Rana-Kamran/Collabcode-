@@ -5,7 +5,7 @@ import { FaPlay, FaSave, FaTrash } from 'react-icons/fa';
 
 import './Editor.css';
 
-const Editor = forwardRef(({ user, role, showToast, socket, roomId,isTeacher,   roomPermissions }, ref) => {
+const Editor = forwardRef(({ user, role, showToast, socket, roomId,isTeacher,   roomPermissions, roomData }, ref) => {
 
   // ========== EXISTING STATES ==========
   const [language, setLanguage] = useState('javascript');
@@ -110,7 +110,7 @@ for(let i = 1; i <= 5; i++) {
   const monacoRef = useRef(null);
 
   // ========== NEW STATES FOR REAL-TIME ==========
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState(socket ? socket.connected : false);
   const [otherCursors, setOtherCursors] = useState({});
   const [typingUsers, setTypingUsers] = useState([]);
   const isApplyingRemoteChange = useRef(false);
@@ -122,6 +122,43 @@ for(let i = 1; i <= 5; i++) {
     { value: 'css', label: 'CSS', extension: 'css', fileName: 'style.css' },
     { value: 'javascript', label: 'JavaScript', extension: 'js', fileName: 'script.js' }
   ];
+
+  // Sync state with roomData prop passed from MainApp
+  useEffect(() => {
+    if (roomData) {
+      if (roomData.htmlCode !== undefined) {
+        setHtmlCode(roomData.htmlCode);
+        htmlCodeRef.current = roomData.htmlCode;
+      }
+      if (roomData.cssCode !== undefined) {
+        setCssCode(roomData.cssCode);
+        cssCodeRef.current = roomData.cssCode;
+      }
+      if (roomData.jsCode !== undefined) {
+        setJsCode(roomData.jsCode);
+        jsCodeRef.current = roomData.jsCode;
+      }
+
+      const activeLang = roomData.language || 'javascript';
+      const langConfig = languages.find(l => l.value === activeLang);
+      if (langConfig) {
+        setLanguage(activeLang);
+        setFileName(langConfig.fileName);
+      }
+
+      let contentToLoad = '';
+      if (activeLang === 'html') contentToLoad = roomData.htmlCode || roomData.code || '';
+      else if (activeLang === 'css') contentToLoad = roomData.cssCode || roomData.code || '';
+      else if (activeLang === 'javascript') contentToLoad = roomData.jsCode || roomData.code || '';
+
+      setCode(contentToLoad);
+      if (editorRef.current) {
+        isApplyingRemoteChange.current = true;
+        editorRef.current.setValue(contentToLoad);
+        isApplyingRemoteChange.current = false;
+      }
+    }
+  }, [roomData]);
 
   // (Legacy useEffect removed to prevent state race conditions on language change)
 
@@ -141,47 +178,13 @@ for(let i = 1; i <= 5; i++) {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('connect', () => setIsConnected(true));
-    socket.on('disconnect', () => setIsConnected(false));
+    setIsConnected(socket.connected);
 
-    socket.on('room-data', (data) => {
-      if (data) {
-        // Sync states if they exist in room-data
-        if (data.htmlCode !== undefined) {
-          setHtmlCode(data.htmlCode);
-          htmlCodeRef.current = data.htmlCode;
-        }
-        if (data.cssCode !== undefined) {
-          setCssCode(data.cssCode);
-          cssCodeRef.current = data.cssCode;
-        }
-        if (data.jsCode !== undefined) {
-          setJsCode(data.jsCode);
-          jsCodeRef.current = data.jsCode;
-        }
+    const onConnect = () => setIsConnected(true);
+    const onDisconnect = () => setIsConnected(false);
 
-        // Sync active language
-        const activeLang = data.language || 'javascript';
-        const langConfig = languages.find(l => l.value === activeLang);
-        if (langConfig) {
-          setLanguage(activeLang);
-          setFileName(langConfig.fileName);
-        }
-
-        // Sync active editor value
-        let contentToLoad = '';
-        if (activeLang === 'html') contentToLoad = data.htmlCode || data.code || '';
-        else if (activeLang === 'css') contentToLoad = data.cssCode || data.code || '';
-        else if (activeLang === 'javascript') contentToLoad = data.jsCode || data.code || '';
-
-        setCode(contentToLoad);
-        if (editorRef.current) {
-          isApplyingRemoteChange.current = true;
-          editorRef.current.setValue(contentToLoad);
-          isApplyingRemoteChange.current = false;
-        }
-      }
-    });
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
 
     socket.on('code-update', (data) => {
       if (data.userId !== socket.id) {
@@ -291,9 +294,8 @@ for(let i = 1; i <= 5; i++) {
     });
 
     return () => {
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('room-data');
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
       socket.off('code-update');
       socket.off('language-update');
       socket.off('output-update');
@@ -307,7 +309,7 @@ for(let i = 1; i <= 5; i++) {
     monacoRef.current = monaco;
 
     editor.onDidChangeCursorPosition((e) => {
-      if (socket && isConnected && roomId) {
+      if (socket && socket.connected && roomId) {
         socket.emit('cursor-move', {
           roomId: roomId,
           userId: socket.id,
@@ -334,7 +336,7 @@ for(let i = 1; i <= 5; i++) {
   };
 
   const handleTyping = () => {
-    if (socket && isConnected && roomId) {
+    if (socket && socket.connected && roomId) {
       socket.emit('typing-start', {
         roomId: roomId,
         userId: socket.id,
@@ -411,7 +413,7 @@ for(let i = 1; i <= 5; i++) {
     }
 
     // 4. SYNC LANGUAGE CHANGE WITH OTHERS
-    if (socket && isConnected && roomId) {
+    if (socket && socket.connected && roomId) {
       socket.emit('language-change', {
         roomId: roomId,
         language: newLang,
@@ -439,7 +441,7 @@ for(let i = 1; i <= 5; i++) {
       setJsCode(newCode);
     }
 
-    if (socket && isConnected && roomId) {
+    if (socket && socket.connected && roomId) {
       socket.emit('code-change', {
         roomId: roomId,
         code: newCode,
@@ -475,7 +477,7 @@ for(let i = 1; i <= 5; i++) {
       outputFrame.style.display = 'block';
       outputContent.style.display = 'none';
       
-      if (socket && isConnected && roomId) {
+      if (socket && socket.connected && roomId) {
         socket.emit('output-change', {
           roomId: roomId,
           type: 'html',
@@ -512,7 +514,7 @@ for(let i = 1; i <= 5; i++) {
       outputFrame.style.display = 'block';
       outputContent.style.display = 'none';
       
-      if (socket && isConnected && roomId) {
+      if (socket && socket.connected && roomId) {
         socket.emit('output-change', {
           roomId: roomId,
           type: 'html',
@@ -571,7 +573,7 @@ for(let i = 1; i <= 5; i++) {
         const finalContent = outputText.replace(/\n/g, '<br>');
         outputContent.innerHTML = finalContent;
 
-        if (socket && isConnected && roomId) {
+        if (socket && socket.connected && roomId) {
           socket.emit('output-change', {
             roomId: roomId,
             type: 'logs',
@@ -585,7 +587,7 @@ for(let i = 1; i <= 5; i++) {
         const errorContent = `❌ Error: ${error.message}<br><br>Stack trace:<br>${error.stack}`;
         outputContent.innerHTML = errorContent;
 
-        if (socket && isConnected && roomId) {
+        if (socket && socket.connected && roomId) {
           socket.emit('output-change', {
             roomId: roomId,
             type: 'logs',
