@@ -95,6 +95,17 @@ for(let i = 1; i <= 5; i++) {
     console.log("Number: " + i);
 }`);
 
+  // REFS TO TRACK LATEST STATE VALUES (to avoid stale closures in socket listeners)
+  const languageRef = useRef(language);
+  const htmlCodeRef = useRef(htmlCode);
+  const cssCodeRef = useRef(cssCode);
+  const jsCodeRef = useRef(jsCode);
+
+  useEffect(() => { languageRef.current = language; }, [language]);
+  useEffect(() => { htmlCodeRef.current = htmlCode; }, [htmlCode]);
+  useEffect(() => { cssCodeRef.current = cssCode; }, [cssCode]);
+  useEffect(() => { jsCodeRef.current = jsCode; }, [jsCode]);
+
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
 
@@ -145,9 +156,15 @@ for(let i = 1; i <= 5; i++) {
     socket.on('code-update', (data) => {
       if (data.userId !== socket.id) {
         const newCode = data.code;
+        const incomingLang = data.language;
+
+        // 1. ALWAYS update the background state for the incoming language
+        if (incomingLang === 'html') setHtmlCode(newCode);
+        else if (incomingLang === 'css') setCssCode(newCode);
+        else if (incomingLang === 'javascript') setJsCode(newCode);
         
-        // Only update if code is actually different to avoid redundant work and cursor jumps
-        if (editorRef.current && editorRef.current.getValue() !== newCode) {
+        // 2. ONLY update the editor if the incoming change is for the CURRENTLY active language
+        if (incomingLang === languageRef.current && editorRef.current && editorRef.current.getValue() !== newCode) {
           isApplyingRemoteChange.current = true;
           
           const position = editorRef.current.getPosition();
@@ -159,6 +176,26 @@ for(let i = 1; i <= 5; i++) {
           setCode(newCode);
           isApplyingRemoteChange.current = false;
         }
+      }
+    });
+
+    socket.on('language-update', (data) => {
+      if (data.userId !== socket.id) {
+        const newLang = data.language;
+        const langConfig = languages.find(l => l.value === newLang);
+        
+        setLanguage(newLang);
+        setFileName(langConfig.fileName);
+        
+        // Load correct content from the LATEST background state (using refs)
+        let contentToLoad = '';
+        if (newLang === 'html') contentToLoad = htmlCodeRef.current;
+        else if (newLang === 'css') contentToLoad = cssCodeRef.current;
+        else if (newLang === 'javascript') contentToLoad = jsCodeRef.current;
+        
+        setCode(contentToLoad);
+        
+        showToast(`${data.userName} switched to ${langConfig.label}`);
       }
     });
 
@@ -308,6 +345,16 @@ for(let i = 1; i <= 5; i++) {
       setCode(cssCode);
     } else if (newLang === 'javascript') {
       setCode(jsCode);
+    }
+
+    // SYNC LANGUAGE CHANGE WITH OTHERS
+    if (socket && isConnected && roomId) {
+      socket.emit('language-change', {
+        roomId: roomId,
+        language: newLang,
+        userId: socket.id,
+        userName: user?.name || 'User'
+      });
     }
     
     showToast(`Switched to ${lang.label} (${lang.fileName})`);

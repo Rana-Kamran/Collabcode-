@@ -97,6 +97,10 @@ module.exports = (io) => {
         socket.to(roomId).emit('code-update', data);
       });
 
+      socket.on('language-change', (data) => {
+        socket.to(roomId).emit('language-update', data);
+      });
+
       socket.on('send-message', (data) => {
         socket.to(roomId).emit('new-message', data);
       });
