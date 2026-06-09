@@ -12,6 +12,7 @@ import {
   FaVideo,
   FaVideoSlash,
   FaCode,
+  FaPlay,
   FaDesktop,
   FaUserMinus,
   FaCheck,
