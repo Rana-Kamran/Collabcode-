@@ -375,7 +375,6 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
             >
               {isVideoOff || !canUseCamera ? <FaVideoSlash /> : <FaVideo />}
             </button>
-            <button className="control-btn leave-btn" onClick={() => window.location.reload()}><FaPhoneSlash /></button>
           </div>
         </div>
       )}

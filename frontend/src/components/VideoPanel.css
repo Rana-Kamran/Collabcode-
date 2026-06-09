@@ -186,14 +186,6 @@
   background-color: #e74c3c;
 }
 
-.control-btn.leave-btn {
-  background-color: #e74c3c;
-}
-
-.control-btn.leave-btn:hover {
-  background-color: #c0392b;
-}
-
 .control-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
