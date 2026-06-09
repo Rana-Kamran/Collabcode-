@@ -242,6 +242,11 @@ const SidebarPanel = ({
     // Use the optimistic update handler from MainApp
     if (onUpdatePermission) {
       onUpdatePermission(participantId, permissionType, newValue);
+      
+      // AUTO-LINK: If Code Editor is toggled, also toggle Run Code
+      if (permissionType === 'editCode') {
+        onUpdatePermission(participantId, 'runCode', newValue);
+      }
     }
   };
 
@@ -369,6 +374,9 @@ const SidebarPanel = ({
                             <span className="perm-badge" title={p.permissions.editCode ? 'Can Edit Code' : 'View Only'}>
                               {p.permissions.editCode ? '✏️' : '👁️'}
                             </span>
+                            <span className="perm-badge" title={p.permissions.runCode ? 'Can Run Code' : 'Cannot Run Code'}>
+                              {p.permissions.runCode ? '🚀' : '⏹️'}
+                            </span>
                             <span className="perm-badge" title={p.permissions.useMicrophone ? 'Mic Enabled' : 'Mic Disabled'}>
                               {p.permissions.useMicrophone ? '🎤' : '🔇'}
                             </span>
@@ -386,7 +394,7 @@ const SidebarPanel = ({
                           onClick={() => setOpenDropdownId(openDropdownId === p.id ? null : p.id)}
                           title="Manage Permissions"
                         >
-                          🎮 {getActiveCount(p.permissions || {})}/3 <FaChevronDown size={8} />
+                          🎮 {getActiveCount(p.permissions || {})}/4 <FaChevronDown size={8} />
                         </button>
                       )}
                       
@@ -405,6 +413,17 @@ const SidebarPanel = ({
                             <div className="permission-status">
                               <div className={`custom-checkbox ${p.permissions?.editCode ? 'checked' : ''}`}>
                                 {p.permissions?.editCode && <FaCheck size={10} />}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="permission-row" onClick={(e) => { e.stopPropagation(); togglePermission(p.id, 'runCode'); }}>
+                            <div className="permission-info">
+                              <FaPlay />
+                              <span>Run Code</span>
+                            </div>
+                            <div className="permission-status">
+                              <div className={`custom-checkbox ${p.permissions?.runCode ? 'checked' : ''}`}>
+                                {p.permissions?.runCode && <FaCheck size={10} />}
                               </div>
                             </div>
                           </div>

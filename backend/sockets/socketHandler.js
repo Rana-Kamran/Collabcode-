@@ -15,6 +15,7 @@ module.exports = (io) => {
         isOnline: true,
         permissions: user.permissions || {
           editCode: user.role === 'teacher' || user.role === 'Teacher',
+          runCode: user.role === 'teacher' || user.role === 'Teacher',
           useMicrophone: true,
           useCamera: true
         }

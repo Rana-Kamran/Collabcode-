@@ -551,7 +551,12 @@ for(let i = 1; i <= 5; i++) {
           </select>
           
           {/*  Run Button */}
-          <button className="btn btn-primary" onClick={handleRunCode} title="Run (Ctrl+Enter)">
+          <button 
+            className={`btn btn-primary ${role?.toLowerCase() === 'student' && !roomPermissions?.runCode ? 'disabled' : ''}`} 
+            onClick={handleRunCode} 
+            title="Run (Ctrl+Enter)"
+            disabled={role?.toLowerCase() === 'student' && !roomPermissions?.runCode}
+          >
             <FaPlay />
           </button>
           
