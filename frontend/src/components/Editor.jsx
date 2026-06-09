@@ -123,16 +123,7 @@ for(let i = 1; i <= 5; i++) {
     { value: 'javascript', label: 'JavaScript', extension: 'js', fileName: 'script.js' }
   ];
 
-  // Update code when switching languages
-  useEffect(() => {
-    if (language === 'html') {
-      setCode(htmlCode);
-    } else if (language === 'css') {
-      setCode(cssCode);
-    } else if (language === 'javascript') {
-      setCode(jsCode);
-    }
-  }, [language]);
+  // (Legacy useEffect removed to prevent state race conditions on language change)
 
   // EXPOSE METHODS TO PARENT COMPONENT
   useImperativeHandle(ref, () => ({
@@ -153,15 +144,61 @@ for(let i = 1; i <= 5; i++) {
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
 
+    socket.on('room-data', (data) => {
+      if (data) {
+        // Sync states if they exist in room-data
+        if (data.htmlCode !== undefined) {
+          setHtmlCode(data.htmlCode);
+          htmlCodeRef.current = data.htmlCode;
+        }
+        if (data.cssCode !== undefined) {
+          setCssCode(data.cssCode);
+          cssCodeRef.current = data.cssCode;
+        }
+        if (data.jsCode !== undefined) {
+          setJsCode(data.jsCode);
+          jsCodeRef.current = data.jsCode;
+        }
+
+        // Sync active language
+        const activeLang = data.language || 'javascript';
+        const langConfig = languages.find(l => l.value === activeLang);
+        if (langConfig) {
+          setLanguage(activeLang);
+          setFileName(langConfig.fileName);
+        }
+
+        // Sync active editor value
+        let contentToLoad = '';
+        if (activeLang === 'html') contentToLoad = data.htmlCode || data.code || '';
+        else if (activeLang === 'css') contentToLoad = data.cssCode || data.code || '';
+        else if (activeLang === 'javascript') contentToLoad = data.jsCode || data.code || '';
+
+        setCode(contentToLoad);
+        if (editorRef.current) {
+          isApplyingRemoteChange.current = true;
+          editorRef.current.setValue(contentToLoad);
+          isApplyingRemoteChange.current = false;
+        }
+      }
+    });
+
     socket.on('code-update', (data) => {
       if (data.userId !== socket.id) {
         const newCode = data.code;
         const incomingLang = data.language;
 
         // 1. ALWAYS update the background state for the incoming language
-        if (incomingLang === 'html') setHtmlCode(newCode);
-        else if (incomingLang === 'css') setCssCode(newCode);
-        else if (incomingLang === 'javascript') setJsCode(newCode);
+        if (incomingLang === 'html') {
+          setHtmlCode(newCode);
+          htmlCodeRef.current = newCode;
+        } else if (incomingLang === 'css') {
+          setCssCode(newCode);
+          cssCodeRef.current = newCode;
+        } else if (incomingLang === 'javascript') {
+          setJsCode(newCode);
+          jsCodeRef.current = newCode;
+        }
         
         // 2. ONLY update the editor if the incoming change is for the CURRENTLY active language
         if (incomingLang === languageRef.current && editorRef.current && editorRef.current.getValue() !== newCode) {
@@ -194,6 +231,13 @@ for(let i = 1; i <= 5; i++) {
         else if (newLang === 'javascript') contentToLoad = jsCodeRef.current;
         
         setCode(contentToLoad);
+
+        // Explicitly update Monaco editor value
+        if (editorRef.current) {
+          isApplyingRemoteChange.current = true;
+          editorRef.current.setValue(contentToLoad);
+          isApplyingRemoteChange.current = false;
+        }
         
         showToast(`${data.userName} switched to ${langConfig.label}`);
       }
@@ -247,7 +291,12 @@ for(let i = 1; i <= 5; i++) {
     });
 
     return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('room-data');
       socket.off('code-update');
+      socket.off('language-update');
+      socket.off('output-update');
       socket.off('cursor-update');
       socket.off('user-typing');
     };
@@ -325,12 +374,16 @@ for(let i = 1; i <= 5; i++) {
   }, [otherCursors]);
 
   const handleLanguageChange = (e) => {
+    // 1. Save current code to background state and ref immediately
     if (language === 'html') {
       setHtmlCode(code);
+      htmlCodeRef.current = code;
     } else if (language === 'css') {
       setCssCode(code);
+      cssCodeRef.current = code;
     } else if (language === 'javascript') {
       setJsCode(code);
+      jsCodeRef.current = code;
     }
     
     const newLang = e.target.value;
@@ -339,15 +392,25 @@ for(let i = 1; i <= 5; i++) {
     const lang = languages.find(l => l.value === newLang);
     setFileName(lang.fileName);
     
+    // 2. Load the corresponding code
+    let contentToLoad = '';
     if (newLang === 'html') {
-      setCode(htmlCode);
+      contentToLoad = htmlCode;
     } else if (newLang === 'css') {
-      setCode(cssCode);
+      contentToLoad = cssCode;
     } else if (newLang === 'javascript') {
-      setCode(jsCode);
+      contentToLoad = jsCode;
+    }
+    setCode(contentToLoad);
+
+    // 3. Explicitly update the Monaco editor content
+    if (editorRef.current) {
+      isApplyingRemoteChange.current = true;
+      editorRef.current.setValue(contentToLoad);
+      isApplyingRemoteChange.current = false;
     }
 
-    // SYNC LANGUAGE CHANGE WITH OTHERS
+    // 4. SYNC LANGUAGE CHANGE WITH OTHERS
     if (socket && isConnected && roomId) {
       socket.emit('language-change', {
         roomId: roomId,

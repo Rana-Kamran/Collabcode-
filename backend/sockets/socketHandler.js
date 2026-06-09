@@ -6,7 +6,76 @@ module.exports = (io) => {
       socket.join(roomId);
       
       if (!roomsData[roomId]) {
-        roomsData[roomId] = { code: '', participants: [] };
+        roomsData[roomId] = {
+          code: '',
+          htmlCode: `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Website</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Welcome to CollabCode!</h1>
+    <p>This is a simple HTML page.</p>
+    <button onclick="sayHello()">Click Me</button>
+    
+    <script src="script.js"></script>
+</body>
+</html>`,
+          cssCode: `/* CSS Styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f0f0;
+}
+
+h1 {
+    color: #2ecc71;
+    text-align: center;
+}
+
+p {
+    color: #333;
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+button {
+    background-color: #2ecc71;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #27ae60;
+}`,
+          jsCode: `// JavaScript Code
+console.log("Hello, World!");
+
+function sayHello() {
+    alert("Hello from JavaScript!");
+    console.log("Button clicked!");
+}
+
+function addNumbers(x, y) {
+    return x + y;
+}
+
+let result = addNumbers(5, 3);
+console.log("5 + 3 = " + result);
+
+for(let i = 1; i <= 5; i++) {
+    console.log("Number: " + i);
+}`,
+          language: 'javascript',
+          participants: []
+        };
       }
 
       const newUser = {
@@ -93,11 +162,20 @@ module.exports = (io) => {
       // ==================== OTHER EVENTS ====================
 
       socket.on('code-change', (data) => {
-        roomsData[roomId].code = data.code;
+        if (roomsData[roomId]) {
+          roomsData[roomId].code = data.code;
+          const lang = data.language || roomsData[roomId].language || 'javascript';
+          if (lang === 'html') roomsData[roomId].htmlCode = data.code;
+          else if (lang === 'css') roomsData[roomId].cssCode = data.code;
+          else if (lang === 'javascript') roomsData[roomId].jsCode = data.code;
+        }
         socket.to(roomId).emit('code-update', data);
       });
 
       socket.on('language-change', (data) => {
+        if (roomsData[roomId]) {
+          roomsData[roomId].language = data.language;
+        }
         socket.to(roomId).emit('language-update', data);
       });
 
