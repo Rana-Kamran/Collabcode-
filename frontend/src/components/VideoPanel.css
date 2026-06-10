@@ -61,8 +61,10 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* Do NOT use overflow:hidden here — it collapses the grid's scroll context */
+  overflow: visible;
   padding: 8px;
+  min-height: 0;
 }
 
 /* ========== VIDEO GRID ========== */
@@ -71,7 +73,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow-y: auto;
+  /* Give the grid a concrete scroll container so cameras never get cut off */
+  overflow-y: auto !important;
+  max-height: calc(100vh - 200px);
+  min-height: 0;
+  padding-right: 2px;
 }
 
 /* ========== VIDEO FEED ========== */
@@ -235,6 +241,26 @@
 .video-grid::-webkit-scrollbar-thumb {
   background: rgba(46, 204, 113, 0.3);
   border-radius: 4px;
+}
+
+/* ========== STUDENT VIEW: Scrollable video grid on laptops ========== */
+/* Applied when role === 'student' via className in MainApp.jsx            */
+.video-panel.student-view {
+  /* Allow the panel itself to grow taller than its flex slot and scroll */
+  overflow-y: auto !important;
+  max-height: 80vh;
+}
+
+.video-panel.student-view .panel-content {
+  overflow: visible;
+  min-height: 0;
+}
+
+.video-panel.student-view .video-grid {
+  overflow-y: auto !important;
+  max-height: 80vh;
+  min-height: 0;
+  flex: unset;      /* prevent flex:1 from collapsing when parent has no height */
 }
 
 /* ========== RESPONSIVE ========== */

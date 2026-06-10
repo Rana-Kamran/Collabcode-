@@ -101,7 +101,10 @@
 .main-container {
   display: flex;
   flex: 1;
-  overflow: hidden;
+  /* overflow:hidden was destroying every child panel's scroll context.
+     Use axis-specific values: clip horizontal side-scroll, allow vertical. */
+  overflow-x: hidden;
+  overflow-y: auto;
   position: relative;
   background-color: var(--editor-bg);
 }

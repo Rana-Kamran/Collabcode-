@@ -5,7 +5,7 @@ import {
 } from 'react-icons/fa';
 import './VideoPanel.css';
 
-const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, currentUser, isTeacher, roomPermissions }) => {
+const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, currentUser, isTeacher, roomPermissions, className }) => {
   
   const [isMinimized, setIsMinimized] = useState(false);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
@@ -306,7 +306,7 @@ const VideoPanel = ({ participants, role, showToast, socket, roomId, userId, cur
   ];
 
   return (
-    <div className={`video-panel ${isMinimized ? 'minimized' : ''}`}>
+    <div className={`video-panel ${isMinimized ? 'minimized' : ''} ${className || ''}`.trim()}>
       <div className="panel-header">
         <h3><FaVideo /> Video Session</h3>
         <div className="panel-controls">

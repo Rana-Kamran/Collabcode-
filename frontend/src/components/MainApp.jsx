@@ -197,14 +197,16 @@ const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) =
     const reader = new FileReader();
     reader.onload = (e) => {
       const uploadedCode = e.target.result;
+      const currentLang = editorRef.current?.getLanguage() || 'javascript';
       if (editorRef.current) {
         editorRef.current.setValue(uploadedCode);
       }
-      if (socket && isConnected && roomId) {
+      if (socket && socket.connected && roomId) {
         socket.emit('code-change', {
           roomId: roomId,
           code: uploadedCode,
-          userId: userId
+          userId: userId,
+          language: currentLang
         });
       }
     };
@@ -310,6 +312,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) =
             currentUser={{ ...user, id: userId }}
             isTeacher={isTeacher}
             roomPermissions={currentPermissions}
+            className={isStudent ? 'student-view' : ''}
           />
         )}
       </div>
