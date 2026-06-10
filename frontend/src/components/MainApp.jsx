@@ -13,8 +13,10 @@ const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) =
   const roomId = currentRoom?.roomId || currentRoom?.id;
   
   // Define helper variables at the top to avoid ReferenceErrors
-  const isTeacher = role?.toLowerCase() === 'teacher' || role?.toLowerCase() === 'host';
-  const isStudent = role?.toLowerCase() === 'student';
+  const isTeacher = role?.toLowerCase() === 'teacher' || 
+                    role?.toLowerCase() === 'host' || 
+                    String(user?.id || user?._id) === String(currentRoom?.teacher);
+  const isStudent = role?.toLowerCase() === 'student' && !isTeacher;
 
   // STABLE USER ID (Crucial for sync)
   const stableUserId = useRef(user?.id || user?._id || `temp-${Math.random().toString(36).substr(2, 9)}`);
@@ -64,7 +66,7 @@ const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) =
         user: {
           id: userId,
           name: user?.name || user?.username || 'User',
-          role: role,
+          role: (String(user?.id || user?._id) === String(currentRoom?.teacher)) ? 'host' : role,
           avatar: (user?.name || user?.username || 'U').charAt(0).toUpperCase()
         }
       });

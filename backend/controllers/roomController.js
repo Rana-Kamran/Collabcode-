@@ -11,14 +11,6 @@ const isDbConnected = () => mongoose.connection.readyState === 1;
 exports.createRoom = async (req, res) => {
   const { name, description } = req.body;
   try {
-    // Check role from token OR allow 'Teacher' if it's a test/emergency
-    const userRole = (req.user.role || '').toLowerCase();
-    
-    // If user is trying to be a teacher, let's be flexible for now to fix the blocking error
-    if (userRole !== 'teacher' && userRole !== 'admin') {
-       console.log(`User ${req.user.id} denied room creation. Role: ${userRole}`);
-       return res.status(403).json({ msg: 'Only teachers can create rooms. Please ensure you signed up as a Teacher.' });
-    }
 
     const roomId = nanoid(6).toUpperCase();
     
@@ -60,7 +52,7 @@ exports.joinRoom = async (req, res) => {
     if (!room) return res.status(404).json({ msg: 'Room not found. Please check the code.' });
     
     const userRole = (req.user.role || '').toLowerCase();
-    if (userRole === 'student') {
+    if (userRole === 'student' && String(room.teacher) !== String(req.user.id)) {
       if (room.students && !room.students.includes(req.user.id)) {
         room.students.push(req.user.id);
         if (isDbConnected() && !room.isMemory) await room.save();

@@ -83,8 +83,8 @@ for(let i = 1; i <= 5; i++) {
         socketId: socket.id,
         isOnline: true,
         permissions: user.permissions || {
-          editCode: user.role === 'teacher' || user.role === 'Teacher',
-          runCode: user.role === 'teacher' || user.role === 'Teacher',
+          editCode: user.role === 'teacher' || user.role === 'Teacher' || user.role === 'host' || user.role === 'Host',
+          runCode: user.role === 'teacher' || user.role === 'Teacher' || user.role === 'host' || user.role === 'Host',
           useMicrophone: true,
           useCamera: true
         }
@@ -122,7 +122,7 @@ for(let i = 1; i <= 5; i++) {
       socket.on('mute-all', () => {
         if (roomsData[roomId]) {
           roomsData[roomId].participants.forEach(p => {
-            if (p.role !== 'teacher' && p.role !== 'Teacher') {
+            if (p.role !== 'teacher' && p.role !== 'Teacher' && p.role !== 'host' && p.role !== 'Host') {
               p.permissions.useMicrophone = false;
               io.to(p.socketId).emit('permission-changed', { permission: 'useMicrophone', value: false });
             }
@@ -134,7 +134,7 @@ for(let i = 1; i <= 5; i++) {
       socket.on('unmute-all', () => {
         if (roomsData[roomId]) {
           roomsData[roomId].participants.forEach(p => {
-            if (p.role !== 'teacher' && p.role !== 'Teacher') {
+            if (p.role !== 'teacher' && p.role !== 'Teacher' && p.role !== 'host' && p.role !== 'Host') {
               p.permissions.useMicrophone = true;
               io.to(p.socketId).emit('permission-changed', { permission: 'useMicrophone', value: true });
             }
