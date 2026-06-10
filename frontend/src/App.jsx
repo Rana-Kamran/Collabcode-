@@ -7,6 +7,7 @@ import TeacherDashboard from './components/TeacherDashboard';
 import StudentDashboard from './components/StudentDashboard';
 import MainApp from './components/MainApp';
 import Toast from './components/Toast';
+import ResetPassword from './components/ResetPassword';
 import { AppProvider } from './context/AppContext';
 import api from './utils/api';
 
@@ -28,6 +29,15 @@ function App() {
     // Check for room in URL
     const urlParams = new URLSearchParams(window.location.search);
     const roomFromUrl = urlParams.get('room');
+
+    // ── Detect magic-link reset params ────────────────────────────────
+    const resetToken = urlParams.get('reset_token');
+    const resetEmail = urlParams.get('email');
+    if (resetToken && resetEmail) {
+      setCurrentScreen('reset-password');
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────
     
     if (savedUser && savedRole && savedToken) {
       const parsedUser = JSON.parse(savedUser);
@@ -154,7 +164,18 @@ function App() {
     <AppProvider>
       <div className="app">
         {currentScreen === 'loading' && <LoadingPage />}
-        
+
+        {currentScreen === 'reset-password' && (
+          <ResetPassword
+            showToast={showToast}
+            onDone={() => {
+              // Clear the magic-link params from the URL, then go to login
+              window.history.replaceState({}, document.title, window.location.pathname);
+              setCurrentScreen('login');
+            }}
+          />
+        )}
+
         {currentScreen === 'login' && (
           <Login onLogin={handleLogin} onSignup={handleSignup} showToast={showToast} />
         )}

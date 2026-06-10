@@ -244,3 +244,120 @@
     display: none;
   }
 }
+
+/* ── Forgot Password Panel ────────────────────────────────────────── */
+.forgot-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 50px;
+  background-color: var(--primary);
+  position: relative;
+}
+
+.forgot-back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--secondary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.forgot-back-btn:hover {
+  background: rgba(46, 204, 113, 0.12);
+  color: var(--accent);
+}
+
+.forgot-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  text-align: center;
+}
+
+.forgot-form h1 {
+  color: var(--secondary);
+  margin-bottom: 12px;
+  font-size: 1.8rem;
+}
+
+.forgot-subtitle {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+  max-width: 280px;
+}
+
+/* Success state */
+.forgot-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  animation: fadeInUp 0.4s ease;
+}
+
+.forgot-success-icon {
+  font-size: 3rem;
+  margin-bottom: 8px;
+}
+
+.forgot-success h2 {
+  color: var(--secondary);
+  font-size: 1.6rem;
+  margin: 0;
+}
+
+.forgot-success p {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.forgot-success strong {
+  color: #fff;
+}
+
+.forgot-note {
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-size: 12px !important;
+}
+
+.btn-outline-green {
+  margin-top: 16px;
+  padding: 10px 28px;
+  border: 2px solid var(--secondary);
+  background: transparent;
+  color: var(--secondary);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.btn-outline-green:hover {
+  background: var(--secondary);
+  color: #fff;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* ─────────────────────────────────────────────────────────────────── */
