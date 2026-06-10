@@ -114,13 +114,22 @@ exports.forgotPassword = async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const magicLink   = `${frontendUrl}?reset_token=${rawToken}&email=${encodeURIComponent(email)}`;
 
-    // ---- Nodemailer transporter ----------------------------------------
+    // ---- Guard: email credentials must be configured ----------------------
+    if (!process.env.EMAIL_USER || process.env.EMAIL_USER === 'your-email@gmail.com') {
+      console.error('ForgotPassword: EMAIL_USER is not configured in .env');
+      return res.status(500).json({ msg: 'Email service is not configured on the server. Please contact the admin.' });
+    }
+
+    // ---- Nodemailer transporter (with timeouts so it never hangs) ----------
     const transporter = nodemailer.createTransport({
       service: process.env.EMAIL_SERVICE || 'gmail',
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      connectionTimeout: 10000,  // 10 s – fail fast if Gmail unreachable
+      greetingTimeout:   10000,
+      socketTimeout:     15000,
     });
 
     const mailOptions = {
@@ -147,7 +156,14 @@ exports.forgotPassword = async (req, res) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    // Race sendMail against a 15-second hard timeout so the server never hangs
+    await Promise.race([
+      transporter.sendMail(mailOptions),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Email sending timed out after 15 seconds. Check EMAIL_USER / EMAIL_PASS in .env')), 15000)
+      ),
+    ]);
+
     console.log('Password reset email sent to:', email);
     return res.json({ msg: 'If that email is registered, a reset link has been sent.' });
 
