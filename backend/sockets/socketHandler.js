@@ -172,11 +172,21 @@ for(let i = 1; i <= 5; i++) {
         socket.to(roomId).emit('code-update', data);
       });
 
-      socket.on('language-change', (data) => {
+      // 'switch-language' carries the full code snapshot for all 3 languages.
+      // We persist each buffer on the server so late-joiners always get current state.
+      socket.on('switch-language', (data) => {
         if (roomsData[roomId]) {
           roomsData[roomId].language = data.language;
+          if (data.htmlCode !== undefined) roomsData[roomId].htmlCode = data.htmlCode;
+          if (data.cssCode  !== undefined) roomsData[roomId].cssCode  = data.cssCode;
+          if (data.jsCode   !== undefined) roomsData[roomId].jsCode   = data.jsCode;
+          // Keep the legacy 'code' field in sync with the newly active language
+          if (data.language === 'html')       roomsData[roomId].code = data.htmlCode;
+          else if (data.language === 'css')   roomsData[roomId].code = data.cssCode;
+          else if (data.language === 'javascript') roomsData[roomId].code = data.jsCode;
         }
-        socket.to(roomId).emit('language-update', data);
+        // Broadcast to everyone else — include the full payload so receivers can hydrate all 3 buffers
+        socket.to(roomId).emit('language-switched', data);
       });
 
       socket.on('send-message', (data) => {
