@@ -52,7 +52,7 @@ function App() {
         setCurrentRoom(JSON.parse(savedRoom));
         setCurrentScreen('main-app');
       } else {
-        setCurrentScreen(savedRole === 'teacher' ? 'teacher-dashboard' : 'student-dashboard');
+        setCurrentScreen('role');
       }
     } else {
       // If not logged in but has room in URL, we wait for login then redirect
@@ -90,7 +90,7 @@ function App() {
         localStorage.removeItem('collabcode-pending-room');
         handleJoinRoom({ roomId: pendingRoom, name: 'Direct Session' });
       } else {
-        setCurrentScreen(userRole === 'teacher' ? 'teacher-dashboard' : 'student-dashboard');
+        setCurrentScreen('role');
       }
 
       showToast('Login successful!');
@@ -110,7 +110,7 @@ function App() {
       localStorage.setItem('collabcode-token', data.token);
       localStorage.setItem('collabcode-role', userRole);
       
-      setCurrentScreen(userRole === 'teacher' ? 'teacher-dashboard' : 'student-dashboard');
+      setCurrentScreen('role');
       showToast('Account created successfully!');
     } catch (err) {
       showToast(err.message, 'error');
