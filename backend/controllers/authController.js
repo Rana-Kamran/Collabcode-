@@ -5,29 +5,37 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');      // built-in Node module – no install needed
 const https = require('https');
 
-// Helper to send email via Resend API (HTTP POST)
-const sendEmailViaResend = ({ to, subject, html }) => {
+// Helper to send email via Brevo API (HTTP POST)
+const sendEmailViaBrevo = ({ to, subject, html }) => {
   return new Promise((resolve, reject) => {
-    const apiKey = process.env.RESEND_API_KEY;
+    const apiKey = process.env.BREVO_API_KEY;
     if (!apiKey) {
-      return reject(new Error('RESEND_API_KEY is not defined in the environment.'));
+      return reject(new Error('BREVO_API_KEY is not defined in the environment.'));
     }
 
     const postData = JSON.stringify({
-      from: process.env.RESEND_FROM_EMAIL || 'CollabCode <onboarding@resend.dev>',
-      to: [to],
+      sender: {
+        name: 'CollabCode',
+        email: 'collabcode.help@gmail.com',
+      },
+      to: [
+        {
+          email: to,
+        },
+      ],
       subject: subject,
-      html: html,
+      htmlContent: html,
     });
 
     const options = {
-      hostname: 'api.resend.com',
+      hostname: 'api.brevo.com',
       port: 443,
-      path: '/emails',
+      path: '/v3/smtp/email',
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json',
         'Content-Length': Buffer.byteLength(postData),
       },
     };
@@ -42,10 +50,10 @@ const sendEmailViaResend = ({ to, subject, html }) => {
           try {
             resolve(JSON.parse(data));
           } catch (e) {
-            resolve({ id: 'success-no-json', raw: data });
+            resolve({ success: true, raw: data });
           }
         } else {
-          reject(new Error(`Resend API returned status ${res.statusCode}: ${data}`));
+          reject(new Error(`Brevo API returned status ${res.statusCode}: ${data}`));
         }
       });
     });
@@ -57,7 +65,7 @@ const sendEmailViaResend = ({ to, subject, html }) => {
     // Set connection timeout
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error('Connection timed out while sending request to Resend.'));
+      reject(new Error('Connection timed out while sending request to Brevo.'));
     });
     
     // 10 second timeout
@@ -67,6 +75,7 @@ const sendEmailViaResend = ({ to, subject, html }) => {
     req.end();
   });
 };
+
 
 
 // Helper to check DB connection
@@ -110,8 +119,8 @@ exports.signup = async (req, res) => {
     user.password = await bcrypt.hash(password, salt);
     await user.save();
 
-    // Send verification email using Resend API (if configured)
-    if (process.env.RESEND_API_KEY) {
+    // Send verification email using Brevo API (if configured)
+    if (process.env.BREVO_API_KEY) {
       try {
         const verificationLink = `${req.protocol}://${req.get('host')}/api/auth/verify-email?token=${verifyToken}`;
 
@@ -134,7 +143,7 @@ exports.signup = async (req, res) => {
           </div>
         `;
 
-        await sendEmailViaResend({
+        await sendEmailViaBrevo({
           to: email,
           subject: '📧 CollabCode – Email Verification',
           html: emailHtml,
@@ -145,7 +154,7 @@ exports.signup = async (req, res) => {
         console.error('Signup Verification Email Error:', emailErr.message);
       }
     } else {
-      console.warn('Signup: Resend API key not configured. Verification email not sent.');
+      console.warn('Signup: Brevo API key not configured. Verification email not sent.');
     }
 
     // Always require email verification — never return a login token on signup
@@ -221,9 +230,9 @@ exports.forgotPassword = async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const magicLink   = `${frontendUrl}?reset_token=${rawToken}&email=${encodeURIComponent(email)}`;
 
-    // ---- Guard: Resend API key must be configured -------------------------
-    if (!process.env.RESEND_API_KEY) {
-      console.error('ForgotPassword: RESEND_API_KEY environment variable is not configured in .env');
+    // ---- Guard: Brevo API key must be configured -------------------------
+    if (!process.env.BREVO_API_KEY) {
+      console.error('ForgotPassword: BREVO_API_KEY environment variable is not configured in .env');
       return res.status(500).json({ msg: 'Email service is not configured on the server. Please contact the admin.' });
     }
 
@@ -246,7 +255,7 @@ exports.forgotPassword = async (req, res) => {
       </div>
     `;
 
-    await sendEmailViaResend({
+    await sendEmailViaBrevo({
       to: email,
       subject: '🔑 CollabCode – Password Reset Link',
       html: emailHtml,
