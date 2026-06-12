@@ -60,6 +60,7 @@ exports.signup = async (req, res) => {
             user: process.env.GMAIL_USER,
             pass: process.env.GMAIL_APP_PASSWORD,
           },
+          dnsLookup: (hostname, options, callback) => dns.lookup(hostname, { family: 4 }, callback),
           connectionTimeout: 10000,
           greetingTimeout:   10000,
           socketTimeout:     15000,
@@ -201,6 +202,7 @@ exports.forgotPassword = async (req, res) => {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_APP_PASSWORD,
       },
+      dnsLookup: (hostname, options, callback) => dns.lookup(hostname, { family: 4 }, callback),
       connectionTimeout: 10000,  // 10 s – fail fast if unreachable
       greetingTimeout:   10000,
       socketTimeout:     15000,
