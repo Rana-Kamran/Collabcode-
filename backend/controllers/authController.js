@@ -52,8 +52,8 @@ exports.signup = async (req, res) => {
       try {
         const transporter = nodemailer.createTransport({
           host: 'smtp.gmail.com',
-          port: 465,
-          secure: true,
+          port: 587,
+          secure: false,
           auth: {
             user: process.env.GMAIL_USER,
             pass: process.env.GMAIL_APP_PASSWORD,
@@ -140,7 +140,7 @@ exports.login = async (req, res) => {
 
     // Check if user is verified
     if (!user.isVerified) {
-      return res.status(400).json({ msg: 'Please check your email and verify your account before logging in' });
+      return res.status(403).json({ msg: 'Please verify your email before logging in' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -193,8 +193,8 @@ exports.forgotPassword = async (req, res) => {
     // ---- Nodemailer transporter (with timeouts so it never hangs) ----------
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // TLS; true for 465, false for other ports
+      port: 587,
+      secure: false, // STARTTLS; use false for port 587
       auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_APP_PASSWORD,
