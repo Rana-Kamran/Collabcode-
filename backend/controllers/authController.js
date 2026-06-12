@@ -48,15 +48,15 @@ exports.signup = async (req, res) => {
 
     // Send verification email using the Nodemailer transporter (if configured)
     let emailSent = false;
-    if (process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
       try {
         const transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: parseInt(process.env.SMTP_PORT, 10) || 587,
-          secure: false,
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
           auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
+            user: process.env.GMAIL_USER,
+            pass: process.env.GMAIL_APP_PASSWORD,
           },
           connectionTimeout: 10000,
           greetingTimeout:   10000,
@@ -66,7 +66,7 @@ exports.signup = async (req, res) => {
         const verificationLink = `${req.protocol}://${req.get('host')}/api/auth/verify-email?token=${verifyToken}`;
 
         const mailOptions = {
-          from: `"CollabCode" <no-reply@collabcode.com>`,
+          from: process.env.GMAIL_USER,
           to: email,
           subject: '📧 CollabCode – Email Verification',
           html: `
@@ -185,19 +185,19 @@ exports.forgotPassword = async (req, res) => {
     const magicLink   = `${frontendUrl}?reset_token=${rawToken}&email=${encodeURIComponent(email)}`;
 
     // ---- Guard: email credentials must be configured ----------------------
-    if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.error('ForgotPassword: SMTP environment variables are not fully configured in .env');
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      console.error('ForgotPassword: Gmail environment variables are not fully configured in .env');
       return res.status(500).json({ msg: 'Email service is not configured on the server. Please contact the admin.' });
     }
 
     // ---- Nodemailer transporter (with timeouts so it never hangs) ----------
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT, 10) || 587,
-      secure: false, // TLS; true for 465, false for other ports (like 2525, 587)
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true, // TLS; true for 465, false for other ports
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
       },
       connectionTimeout: 10000,  // 10 s – fail fast if unreachable
       greetingTimeout:   10000,
@@ -205,7 +205,7 @@ exports.forgotPassword = async (req, res) => {
     });
 
     const mailOptions = {
-      from: `"CollabCode" <no-reply@collabcode.com>`,
+      from: process.env.GMAIL_USER,
       to: email,
       subject: '🔑 CollabCode – Password Reset Link',
       html: `
