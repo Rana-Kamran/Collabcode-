@@ -104,18 +104,11 @@ exports.signup = async (req, res) => {
         console.error('Signup Verification Email Error:', emailErr.message);
       }
     } else {
-      console.warn('Signup: SMTP credentials not configured. Verification email not sent.');
+      console.warn('Signup: Gmail credentials not configured. Verification email not sent.');
     }
 
-    if (emailSent) {
-      return res.json({ msg: 'Registration successful! Please check your email to verify your account.' });
-    }
-
-    const payload = { user: { id: user.id, role: user.role } };
-    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: 36000 }, (err, token) => {
-      if (err) throw err;
-      res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
-    });
+    // Always require email verification — never return a login token on signup
+    return res.json({ msg: 'Registration successful! Please check your email to verify your account before logging in.' });
   } catch (err) {
     console.error('Signup Error:', err.message);
     res.status(500).json({ msg: 'Server Database Error: ' + err.message });
