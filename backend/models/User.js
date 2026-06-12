@@ -35,6 +35,15 @@ const UserSchema = new mongoose.Schema({
   resetTokenExpiry: {
     type: Date,
     default: null
+  },
+  // ===== Email Verification =====
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  verifyToken: {
+    type: String,
+    default: null
   }
 });
 

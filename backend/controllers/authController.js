@@ -38,10 +38,69 @@ exports.signup = async (req, res) => {
     let userByName = await User.findOne({ username });
     if (userByName) return res.status(400).json({ msg: 'Username already taken' });
 
-    user = new User({ username, email, password, role });
+    // Generate verification token
+    const verifyToken = crypto.randomBytes(32).toString('hex');
+
+    user = new User({ username, email, password, role, verifyToken });
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(password, salt);
     await user.save();
+
+    // Send verification email using the Nodemailer transporter (if configured)
+    if (process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT, 10) || 587,
+          secure: false,
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+          connectionTimeout: 10000,
+          greetingTimeout:   10000,
+          socketTimeout:     15000,
+        });
+
+        const verificationLink = `${req.protocol}://${req.get('host')}/api/auth/verify-email?token=${verifyToken}`;
+
+        const mailOptions = {
+          from: `"CollabCode" <no-reply@collabcode.com>`,
+          to: email,
+          subject: '📧 CollabCode – Email Verification',
+          html: `
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;background:#1E1E2F;padding:32px;border-radius:12px">
+              <h2 style="color:#2ecc71;margin-bottom:8px">CollabCode</h2>
+              <h3 style="color:#fff;margin-top:0">Email Verification Required</h3>
+              <p style="color:#ccc">Hi <strong style="color:#fff">${user.username}</strong>,</p>
+              <p style="color:#ccc">Thank you for signing up for CollabCode! Please verify your email address by clicking the button below:</p>
+              <a href="${verificationLink}"
+                 style="display:inline-block;margin:24px 0;padding:14px 32px;
+                        background:#2ecc71;color:#fff;text-decoration:none;
+                        border-radius:8px;font-weight:bold;font-size:16px">
+                Verify My Email
+              </a>
+              <p style="color:#888;font-size:12px">If you did not register for CollabCode, you can safely ignore this email.</p>
+              <p style="color:#888;font-size:12px">Or copy this link:<br>
+                <span style="color:#2ecc71;word-break:break-all">${verificationLink}</span>
+              </p>
+            </div>
+          `,
+        };
+
+        await Promise.race([
+          transporter.sendMail(mailOptions),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Email sending timed out after 15 seconds.')), 15000)
+          ),
+        ]);
+        console.log('Verification email sent to:', email);
+      } catch (emailErr) {
+        console.error('Signup Verification Email Error:', emailErr.message);
+      }
+    } else {
+      console.warn('Signup: SMTP credentials not configured. Verification email not sent.');
+    }
 
     const payload = { user: { id: user.id, role: user.role } };
     jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: 36000 }, (err, token) => {
@@ -72,6 +131,11 @@ exports.login = async (req, res) => {
   try {
     let user = await User.findOne({ email });
     if (!user) return res.status(400).json({ msg: 'Email does not exist. Please sign up.' });
+
+    // Check if user is verified
+    if (!user.isVerified) {
+      return res.status(400).json({ msg: 'Please check your email and verify your account before logging in' });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ msg: 'Invalid Password' });
@@ -214,5 +278,91 @@ exports.resetPassword = async (req, res) => {
   } catch (err) {
     console.error('ResetPassword Error:', err.message);
     res.status(500).json({ msg: 'Server error resetting password: ' + err.message });
+  }
+};
+
+// =====================================================================
+// VERIFY EMAIL – Validate token and set isVerified to true
+// =====================================================================
+exports.verifyEmail = async (req, res) => {
+  const { token } = req.query;
+
+  if (!token) {
+    return res.status(400).json({ msg: 'Verification token is required' });
+  }
+
+  try {
+    const user = await User.findOne({ verifyToken: token });
+
+    if (!user) {
+      return res.status(400).json({ msg: 'Invalid or expired verification token.' });
+    }
+
+    user.isVerified = true;
+    user.verifyToken = null;
+    await user.save();
+
+    return res.send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Email Verified - CollabCode</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1E1E2F;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+          }
+          .card {
+            background-color: #2D2D44;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+          }
+          h1 {
+            color: #2ecc71;
+            margin-top: 0;
+          }
+          p {
+            color: #ccc;
+            line-height: 1.6;
+          }
+          .btn {
+            display: inline-block;
+            margin-top: 24px;
+            padding: 12px 24px;
+            background-color: #2ecc71;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: background-color 0.2s;
+          }
+          .btn:hover {
+            background-color: #27ae60;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>✓ Email Verified!</h1>
+          <p>Your email address has been successfully verified. You can now return to the application and sign in.</p>
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}" class="btn">Go to Login</a>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error('VerifyEmail Error:', err.message);
+    res.status(500).json({ msg: 'Server error verifying email: ' + err.message });
   }
 };
