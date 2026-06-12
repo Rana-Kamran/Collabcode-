@@ -115,25 +115,27 @@ exports.forgotPassword = async (req, res) => {
     const magicLink   = `${frontendUrl}?reset_token=${rawToken}&email=${encodeURIComponent(email)}`;
 
     // ---- Guard: email credentials must be configured ----------------------
-    if (!process.env.EMAIL_USER || process.env.EMAIL_USER === 'your-email@gmail.com') {
-      console.error('ForgotPassword: EMAIL_USER is not configured in .env');
+    if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.error('ForgotPassword: SMTP environment variables are not fully configured in .env');
       return res.status(500).json({ msg: 'Email service is not configured on the server. Please contact the admin.' });
     }
 
     // ---- Nodemailer transporter (with timeouts so it never hangs) ----------
     const transporter = nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE || 'gmail',
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT, 10) || 587,
+      secure: false, // TLS; true for 465, false for other ports (like 2525, 587)
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
       },
-      connectionTimeout: 10000,  // 10 s – fail fast if Gmail unreachable
+      connectionTimeout: 10000,  // 10 s – fail fast if unreachable
       greetingTimeout:   10000,
       socketTimeout:     15000,
     });
 
     const mailOptions = {
-      from: `"CollabCode" <${process.env.EMAIL_USER}>`,
+      from: `"CollabCode" <no-reply@collabcode.com>`,
       to: email,
       subject: '🔑 CollabCode – Password Reset Link',
       html: `
@@ -160,7 +162,7 @@ exports.forgotPassword = async (req, res) => {
     await Promise.race([
       transporter.sendMail(mailOptions),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Email sending timed out after 15 seconds. Check EMAIL_USER / EMAIL_PASS in .env')), 15000)
+        setTimeout(() => reject(new Error('Email sending timed out after 15 seconds. Check SMTP credentials in .env')), 15000)
       ),
     ]);
 
