@@ -12,7 +12,6 @@ export const useWebRTC = (roomId, userId) => {
   const screenStreamRef = useRef(null);
 
   useEffect(() => {
-    // Initialize local stream
     const initLocalStream = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -29,7 +28,6 @@ export const useWebRTC = (roomId, userId) => {
     initLocalStream();
 
     return () => {
-      // Cleanup
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
       }

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 
 export const useLocalStorage = (key, initialValue) => {
-  // Get from local storage then parse stored json or return initialValue
   const readValue = () => {
     if (typeof window === 'undefined') {
       return initialValue;
@@ -28,10 +27,8 @@ export const useLocalStorage = (key, initialValue) => {
       // Allow value to be a function so we have same API as useState
       const newValue = value instanceof Function ? value(storedValue) : value;
       
-      // Save to localStorage
       window.localStorage.setItem(key, JSON.stringify(newValue));
       
-      // Save state
       setStoredValue(newValue);
       
       // Dispatch a custom event so other tabs can update

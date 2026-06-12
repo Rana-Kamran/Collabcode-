@@ -46,7 +46,6 @@ const MainApp = ({ user, role, currentRoom, onLogout, onExitRoom, showToast }) =
   const editorRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Socket connection 
   useEffect(() => {
     if (!roomId) return;
 

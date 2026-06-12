@@ -1,5 +1,3 @@
-// sidebar panel for participants list and chat
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   FaWindowMinimize, 
@@ -58,7 +56,6 @@ const SidebarPanel = ({
 
   const isHost = role === 'host' || role === 'teacher' || isTeacher;
 
-  // Socket listeners for real-time chat
   useEffect(() => {
     if (!socket) return;
 

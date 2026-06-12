@@ -7,11 +7,9 @@ export const useMonaco = (initialValue = '', language = 'javascript') => {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Load Monaco
     const loadMonaco = async () => {
       const monaco = await import('monaco-editor');
       
-      // Create editor
       editorRef.current = monaco.editor.create(containerRef.current, {
         value: initialValue,
         language: language,
@@ -35,14 +33,11 @@ export const useMonaco = (initialValue = '', language = 'javascript') => {
         cursorSmoothCaretAnimation: true
       });
 
-      // Add keyboard shortcuts
       editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-        // Run code
         console.log('Run code');
       });
 
       editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        // Save code
         console.log('Save code');
       });
     };

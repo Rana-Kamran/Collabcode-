@@ -20,7 +20,6 @@ function App() {
   const [toast, setToast] = useState({ show: false, message: '' });
 
   useEffect(() => {
-    // Check if user was logged in
     const savedUser = localStorage.getItem('collabcode-user');
     const savedRole = localStorage.getItem('collabcode-role');
     const savedToken = localStorage.getItem('collabcode-token');

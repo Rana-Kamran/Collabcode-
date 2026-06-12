@@ -78,15 +78,12 @@ const sendEmailViaBrevo = ({ to, subject, html }) => {
 
 
 
-// Helper to check DB connection
 const isDbConnected = () => mongoose.connection.readyState === 1;
 
-// Signup
 exports.signup = async (req, res) => {
   console.log('Signup Attempt:', req.body.email);
   let { username, email, password, role } = req.body;
 
-  // Normalize inputs
   email = email.toLowerCase();
   username = username.toLowerCase();
 
@@ -107,11 +104,9 @@ exports.signup = async (req, res) => {
     let user = await User.findOne({ email });
     if (user) return res.status(400).json({ msg: 'User already exists with this email' });
 
-    // Also check if username exists
     let userByName = await User.findOne({ username });
     if (userByName) return res.status(400).json({ msg: 'Username already taken' });
 
-    // Generate verification token
     const verifyToken = crypto.randomBytes(32).toString('hex');
 
     user = new User({ username, email, password, role, verifyToken });
@@ -165,12 +160,10 @@ exports.signup = async (req, res) => {
   }
 };
 
-// Login
 exports.login = async (req, res) => {
   console.log('Login Attempt:', req.body.email);
   let { email, password, role } = req.body;
 
-  // Normalize input
   email = email.toLowerCase();
 
   if (!isDbConnected()) {
@@ -184,7 +177,6 @@ exports.login = async (req, res) => {
     let user = await User.findOne({ email });
     if (!user) return res.status(400).json({ msg: 'Email does not exist. Please sign up.' });
 
-    // Check if user is verified
     if (!user.isVerified) {
       return res.status(403).json({ msg: 'Please verify your email before logging in' });
     }
@@ -297,7 +289,6 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ msg: 'Invalid or expired reset link. Please request a new one.' });
     }
 
-    // Hash and save the new password, then clear the reset fields
     const salt = await bcrypt.genSalt(10);
     user.password         = await bcrypt.hash(newPassword, salt);
     user.resetToken       = null;

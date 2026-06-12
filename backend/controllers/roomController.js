@@ -7,7 +7,6 @@ let memoryRooms = [];
 
 const isDbConnected = () => mongoose.connection.readyState === 1;
 
-// Create Room
 exports.createRoom = async (req, res) => {
   const { name, description } = req.body;
   try {
@@ -35,7 +34,6 @@ exports.createRoom = async (req, res) => {
   }
 };
 
-// Join Room
 exports.joinRoom = async (req, res) => {
   const { roomId } = req.body;
   try {
@@ -65,7 +63,6 @@ exports.joinRoom = async (req, res) => {
   }
 };
 
-// Get All Rooms
 exports.getRooms = async (req, res) => {
   try {
     let rooms = [];
