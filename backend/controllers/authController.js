@@ -14,7 +14,7 @@ const sendEmailViaResend = ({ to, subject, html }) => {
     }
 
     const postData = JSON.stringify({
-      from: 'CollabCode <onboarding@resend.dev>',
+      from: process.env.RESEND_FROM_EMAIL || 'CollabCode <onboarding@resend.dev>',
       to: [to],
       subject: subject,
       html: html,
