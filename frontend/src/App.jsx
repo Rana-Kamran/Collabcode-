@@ -102,6 +102,14 @@ function App() {
   const handleSignup = async (username, email, password, role) => {
     try {
       const data = await api.post('/auth/signup', { username, email, password, role });
+      
+      // If backend did not return a token, verification is required
+      if (!data.token) {
+        showToast(data.msg || 'Registration successful! Please check your email to verify your account.', 'success');
+        setCurrentScreen('login');
+        return;
+      }
+
       setUser(data.user);
       setToken(data.token);
       const userRole = data.user.role.toLowerCase();

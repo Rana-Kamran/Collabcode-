@@ -47,6 +47,7 @@ exports.signup = async (req, res) => {
     await user.save();
 
     // Send verification email using the Nodemailer transporter (if configured)
+    let emailSent = false;
     if (process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS) {
       try {
         const transporter = nodemailer.createTransport({
@@ -95,11 +96,16 @@ exports.signup = async (req, res) => {
           ),
         ]);
         console.log('Verification email sent to:', email);
+        emailSent = true;
       } catch (emailErr) {
         console.error('Signup Verification Email Error:', emailErr.message);
       }
     } else {
       console.warn('Signup: SMTP credentials not configured. Verification email not sent.');
+    }
+
+    if (emailSent) {
+      return res.json({ msg: 'Registration successful! Please check your email to verify your account.' });
     }
 
     const payload = { user: { id: user.id, role: user.role } };
