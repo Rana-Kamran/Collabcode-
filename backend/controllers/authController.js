@@ -16,7 +16,7 @@ const sendEmailViaBrevo = ({ to, subject, html }) => {
     const postData = JSON.stringify({
       sender: {
         name: 'CollabCode',
-        email: 'collabcode.help@gmail.com',
+        email: process.env.BREVO_SENDER_EMAIL || 'collabcode.help@gmail.com',
       },
       to: [
         {
