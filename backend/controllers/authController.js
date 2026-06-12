@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const crypto = require('crypto');      // built-in Node module – no install needed
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
 
 // Helper to check DB connection
 const isDbConnected = () => mongoose.connection.readyState === 1;
